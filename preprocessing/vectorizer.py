@@ -1,4 +1,3 @@
-from preprocessing.clean import clean_text
 from sklearn.feature_extraction.text import TfidfVectorizer
 
 
@@ -13,14 +12,16 @@ def transform(texts):
     return vectorizer.transform(texts)
 
 
-texts = [
-    clean_text("This product is AMAZING"),
-    clean_text("I love this product"),
-]
-
-X = fit_transform(texts)
-
-print(X.toarray())
-
+# idf(word) = log(N / df)
 # Rare across documents → high importance (high IDF)
 # Common across documents → low importance (low IDF)
+# idf = log((1 + N) / (1 + df)) + 1 => normalization instead of v / ||v||
+#
+# fit
+# builds vocabulary (word → index)
+# computes IDF values (global importance per word)
+#
+# transform
+# converts text → TF (counts / frequencies)
+# applies TF × IDF
+# applies normalization
