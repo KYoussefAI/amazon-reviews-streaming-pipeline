@@ -1,4 +1,7 @@
 def get_label(score: int) -> str:
+    if score is None:
+        return "unknown"
+
     if score < 3:
         return "negative"
     elif score == 3:
