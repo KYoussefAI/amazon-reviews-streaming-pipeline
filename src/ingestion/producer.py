@@ -4,7 +4,7 @@ import time
 import pandas as pd
 
 # Load dataset
-df = pd.read_csv("Reviews.csv")
+df = pd.read_csv(r".\data\raw\Reviews.csv")
 
 # Keep only useful columns
 df = df[['Text', 'Score']].dropna()

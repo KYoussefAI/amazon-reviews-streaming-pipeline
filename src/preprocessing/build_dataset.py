@@ -1,5 +1,5 @@
 import pandas as pd
-from preprocessing.dataset import build_dataset
+from src.preprocessing.dataset import build_dataset
 
 df = pd.read_csv("data/raw/Reviews.csv")
 

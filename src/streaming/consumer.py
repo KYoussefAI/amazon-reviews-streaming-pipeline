@@ -1,6 +1,6 @@
 from kafka import KafkaConsumer
 import json
-from preprocessing.clean import clean_text
+from src.preprocessing.clean import clean_text
 
 consumer = KafkaConsumer(
     'amazon_reviews',

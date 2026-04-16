@@ -1,4 +1,4 @@
-docker exec -it bigdataproject-kafka-1 bash  # starts docker project
+docker exec -it kafka-kafka-1 bash  # starts docker project
 
 kafka-console-consumer \
 --topic amazon_reviews \

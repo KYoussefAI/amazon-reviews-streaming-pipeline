@@ -1,6 +1,6 @@
-from preprocessing.clean import clean_text
-from preprocessing.vectorizer import fit_transform
-from preprocessing.label import get_label
+from src.preprocessing.clean import clean_text
+from src.preprocessing.vectorizer import fit_transform
+from src.preprocessing.label import get_label
 
 
 def build_dataset(texts, scores):
