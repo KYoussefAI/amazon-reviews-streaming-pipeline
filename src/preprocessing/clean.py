@@ -35,5 +35,5 @@ def clean_text(text: str) -> str:
     return " ".join(words)
 
 
-sample = "This product is AMAZING!!! I'm Loving it 100%"
-print(clean_text(sample))
+# sample = "This product is AMAZING!!! I'm Happy !! "
+# print(clean_text(sample))

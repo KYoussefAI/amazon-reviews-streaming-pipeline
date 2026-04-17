@@ -3,3 +3,4 @@ __pycache__/
 *.pyc
 structure.txt
 useful_commands.txt
+.venv
