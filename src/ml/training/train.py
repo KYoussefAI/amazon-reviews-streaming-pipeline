@@ -3,7 +3,7 @@ from pyspark.ml.linalg import Vectors
 from pyspark.sql import SparkSession
 from pyspark.ml.classification import LogisticRegression
 from pyspark.ml.feature import StringIndexer
-
+from pyspark.sql import functions as F
 
 spark = SparkSession.builder \
     .appName("Training") \
@@ -61,3 +61,45 @@ print("Model trained successfully")
 
 predictions = model.transform(test_df)
 predictions.select("features", "label", "label_index", "prediction").show(5)
+
+# confusion matrix
+cm = predictions.groupBy("label_index", "prediction").count()
+
+# total actual per class (row sum)
+actual_totals = cm.groupBy("label_index") \
+    .agg(F.sum("count").alias("actual_total"))
+
+# total predicted per class (column sum)
+pred_totals = cm.groupBy("prediction") \
+    .agg(F.sum("count").alias("pred_total"))
+
+# true positives (diagonal)
+tp = cm.filter(F.col("label_index") == F.col("prediction")) \
+    .select(
+        F.col("label_index").alias("class"),
+        F.col("count").alias("tp")
+    )
+
+# join everything
+metrics = tp \
+    .join(actual_totals, tp["class"] == actual_totals["label_index"]) \
+    .join(pred_totals, tp["class"] == pred_totals["prediction"]) \
+    .select(
+        "class",
+        "tp",
+        "actual_total",
+        "pred_total"
+    )
+
+# compute metrics
+metrics = metrics.withColumn(
+    "precision", F.col("tp") / F.col("pred_total")
+).withColumn(
+    "recall", F.col("tp") / F.col("actual_total")
+).withColumn(
+    "f1",
+    2 * (F.col("precision") * F.col("recall")) /
+    (F.col("precision") + F.col("recall"))
+)
+
+metrics.show()
