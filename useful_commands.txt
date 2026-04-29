@@ -1,0 +1,13 @@
+docker exec -it kafka-kafka-1 bash  # starts docker project
+
+kafka-console-consumer \
+--topic amazon_reviews \
+--from-beginning \
+--bootstrap-server localhost:9092   # consumer
+
+kafka-console-producer \
+--topic amazon_reviews \
+--bootstrap-server localhost:9092   # producer  or run producer.py
+
+
+source ../env/big_data_env/bin/activate

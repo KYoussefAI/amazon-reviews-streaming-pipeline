@@ -1,5 +1,5 @@
-from src.preprocessing.clean import clean_text
-from src.preprocessing.label import get_label
+from src.experiments.preprocessing.clean import clean_text
+from src.experiments.preprocessing.label import get_label
 from sklearn.model_selection import train_test_split
 import pandas as pd
 

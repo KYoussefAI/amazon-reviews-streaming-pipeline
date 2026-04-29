@@ -1,6 +1,6 @@
-from src.preprocessing.dataset import load_dataset
-from src.preprocessing.vectorizer import fit_transform, transform
-from src.preprocessing.resampling import undersample,oversample
+from src.experiments.preprocessing.dataset import load_dataset
+from src.experiments.preprocessing.vectorizer import fit_transform, transform
+from src.experiments.preprocessing.resampling import undersample,oversample
 from pyspark.ml.linalg import Vectors
 from pyspark.sql import SparkSession
 from pyspark.ml.classification import LogisticRegression

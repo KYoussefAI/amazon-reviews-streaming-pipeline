@@ -1,8 +1,22 @@
+# Raw datasets
 data/raw/Reviews.csv
+
+# Python
 __pycache__/
 *.pyc
-structure.txt
-useful_commands.txt
-.venv
-project_context.md
-notes
+.venv/
+
+# Spark
+*.crc
+_SUCCESS
+checkpoint/
+checkpoints/
+spark-warehouse/
+metastore_db/
+
+# Models / large generated artifacts
+src/spark/models/
+src/ml/models/
+
+# Logs
+*.log

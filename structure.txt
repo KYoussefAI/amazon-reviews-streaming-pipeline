@@ -1,0 +1,45 @@
+BIG-DATA-PROJECT/
+│
+├── src/
+│   ├── ingestion/
+│   │   └── producer.py
+│   │
+│   ├── experiments/
+│   │   ├── preprocessing/
+│   │   │   ├── clean.py
+│   │   │   ├── vectorizer.py
+│   │   │   ├── label.py
+│   │   │   ├── dataset.py
+│   │   │   └── resampling.py
+│   │   │
+│   │   └── training/
+│   │       └── train.py
+│   │
+│   ├── spark/
+│   │   ├── training/
+│   │   │   └── train_spark_pipeline.py
+│   │   │
+│   │   ├── streaming/
+│   │   │   └── predict_stream.py
+│   │   │
+│   │   └── models/
+│   │       └── sentiment_pipeline_model/
+│   │
+│   ├── storage/
+│   │   └── mongodb_writer.py
+│   │
+│   └── utils/
+│
+├── data/
+│   └── raw/
+│       └── Reviews.csv
+│
+├── kafka/
+│   └── docker-compose.yml
+│
+├── orchestration/
+│   └── dags/
+│
+├── requirements.txt
+├── README.md
+└── .gitignore
