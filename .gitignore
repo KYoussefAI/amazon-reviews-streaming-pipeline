@@ -25,3 +25,5 @@ src/ml/models/
 src/spark/model/
 src/spark/models/
 *.model
+
+project_progress.md
