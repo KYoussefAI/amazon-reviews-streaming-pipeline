@@ -20,3 +20,8 @@ src/ml/models/
 
 # Logs
 *.log
+
+# Spark trained models
+src/spark/model/
+src/spark/models/
+*.model
