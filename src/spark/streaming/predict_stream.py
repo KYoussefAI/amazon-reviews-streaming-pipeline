@@ -40,11 +40,12 @@ def load_model():
 
 def get_index_to_label_mapping(model):
     """
-    The saved pipeline contains a StringIndexerModel.
-    It stores the label order, for example:
-    index 0 -> positive
-    index 1 -> negative
-    index 2 -> neutral
+    Finds the StringIndexerModel inside the saved PipelineModel.
+    It contains the label order learned during training.
+    Example:
+    0.0 -> positive
+    1.0 -> negative
+    2.0 -> neutral
     """
 
     for stage in model.stages:
@@ -52,6 +53,20 @@ def get_index_to_label_mapping(model):
             return stage.labels
 
     raise ValueError("No StringIndexerModel with labels found in the saved pipeline.")
+
+
+def build_prediction_label_column(labels):
+    prediction_label_expr = None
+
+    for index, label in enumerate(labels):
+        condition = F.col("prediction") == float(index)
+
+        if prediction_label_expr is None:
+            prediction_label_expr = F.when(condition, F.lit(label))
+        else:
+            prediction_label_expr = prediction_label_expr.when(condition, F.lit(label))
+
+    return prediction_label_expr.otherwise(F.lit("unknown"))
 
 
 def main():
@@ -88,12 +103,10 @@ def main():
         F.col("data.score").alias("score")
     ).dropna(subset=["text"])
 
-    # Important:
-    # The saved training PipelineModel contains a StringIndexerModel
-    # that expects a "label" column during transform().
-    # In streaming inference, we do not know the true label.
-    # So we add a dummy label only to satisfy the saved pipeline.
-    # It does NOT affect prediction.
+    # The saved PipelineModel contains a fitted StringIndexerModel.
+    # During streaming prediction we do not know the true label.
+    # This dummy label only satisfies the pipeline schema.
+    # It does not affect the prediction.
     prediction_input_df = parsed_df.withColumn(
         "label",
         F.lit(labels[0])
@@ -104,29 +117,16 @@ def main():
 
     predictions = model.transform(prediction_input_df)
 
-    prediction_label_expr = None
-
-    for index, label in enumerate(labels):
-        condition = F.col("prediction") == float(index)
-
-        if prediction_label_expr is None:
-            prediction_label_expr = F.when(condition, F.lit(label))
-        else:
-            prediction_label_expr = prediction_label_expr.when(condition, F.lit(label))
-
-    prediction_label_expr = prediction_label_expr.otherwise(F.lit("unknown"))
-
     output_df = predictions.withColumn(
         "predicted_label",
-        prediction_label_expr
+        build_prediction_label_column(labels)
     ).select(
-        "text",
+        F.substring("text", 1, 120).alias("text_preview"),
         "score",
         "prediction",
         "predicted_label",
         "probability"
     )
-
     print("========== STREAMING PREDICTIONS STARTED ==========")
 
     query = output_df.writeStream \

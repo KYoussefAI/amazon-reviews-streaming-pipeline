@@ -9,7 +9,7 @@ kafka-console-producer \
 --topic amazon_reviews \
 --bootstrap-server localhost:9092   # producer  or run producer.py
 
-
+cd "/mnt/c/Users/Me/Desktop/END TO END DATA ENGINEERING PROJECTS/BIG DATA PROJECT"
 source ../env/big_data_env/bin/activate
 spark-submit src/spark/training/train_spark_pipeline.py 2>/dev/null | grep -A 20 -E "==========|Accuracy|Correct predictions|Total predictions|positive|negative|neutral|label_index|class_index"
 spark-submit src/spark/training/tune_spark_pipeline_sa.py 2>/dev/null

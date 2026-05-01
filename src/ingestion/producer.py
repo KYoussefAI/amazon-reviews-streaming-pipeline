@@ -4,7 +4,7 @@ import time
 import pandas as pd
 
 # Load dataset
-df = pd.read_csv(r".\data\raw\Reviews.csv")
+df = pd.read_csv("data/raw/Reviews.csv")
 
 # Keep only useful columns
 df = df[['Text', 'Score']].dropna()
@@ -23,6 +23,9 @@ for _, row in df.iterrows():
     }
 
     producer.send("amazon_reviews", message)
-    print(f"Sent: {message}")
+    print(
+        f"Sent: score={message['score']} "
+        f"text={message['text'][:100]}..."
+    )
 
     time.sleep(0.5)  # simulate real-time
