@@ -1,14 +1,33 @@
 # Amazon Reviews Real-Time Sentiment Analysis Pipeline
 
-End-to-end Big Data project for real-time sentiment analysis on Amazon review events using Kafka, Apache Spark, Spark ML, and downstream storage/visualization components.
+A production-oriented Big Data project for real-time sentiment analysis on Amazon review events using Kafka, Apache Spark Structured Streaming, Spark ML, and MongoDB.
 
-The project is designed as a production-oriented learning system: first build a working pipeline, then progressively improve scalability, model quality, storage, orchestration, and monitoring.
+The project is built phase by phase to simulate a real data engineering workflow: ingestion, distributed processing, machine learning inference, storage, visualization, and orchestration.
+
+---
+
+## Table of Contents
+
+1. [Project Objective](#1-project-objective)
+2. [Current Project Status](#2-current-project-status)
+3. [Architecture](#3-architecture)
+4. [Dataset](#4-dataset)
+5. [Repository Structure](#5-repository-structure)
+6. [Completed Phases](#6-completed-phases)
+7. [Spark ML Training Pipeline](#7-spark-ml-training-pipeline)
+8. [Model Tuning Summary](#8-model-tuning-summary)
+9. [Final Model Metrics](#9-final-model-metrics)
+10. [Phase 8: Streaming Inference](#10-phase-8-streaming-inference)
+11. [How to Run the Project](#11-how-to-run-the-project)
+12. [Git and Artifact Rules](#12-git-and-artifact-rules)
+13. [Next Phase: MongoDB Storage](#13-next-phase-mongodb-storage)
+14. [Future Work](#14-future-work)
 
 ---
 
 ## 1. Project Objective
 
-The objective is to build a complete real-time data engineering and machine learning pipeline:
+The objective is to build a complete real-time Big Data and machine learning pipeline:
 
 ```text
 Amazon Reviews Dataset
@@ -19,17 +38,87 @@ Amazon Reviews Dataset
 → Dashboard
 ```
 
-The current architecture target is:
+The fixed target architecture is:
 
 ```text
 Producer → Kafka → Spark → MongoDB → Dashboard
 ```
 
-The project currently focuses on the Spark ML model training and the transition toward real-time streaming inference.
+The current implementation has completed the Spark streaming inference step and is ready to move into MongoDB storage.
 
 ---
 
-## 2. Dataset
+## 2. Current Project Status
+
+Completed:
+
+- Kafka producer that streams Amazon review events.
+- Kafka topic used for review ingestion.
+- Spark-only ML training pipeline.
+- Train/validation/test split.
+- Class-weighted Logistic Regression.
+- TF-IDF feature extraction using Spark ML.
+- Unigram + bigram feature engineering.
+- Simulated Annealing hyperparameter tuning.
+- Final Spark `PipelineModel` training and local saving.
+- Spark Structured Streaming inference from Kafka.
+- Real-time sentiment predictions printed to the console.
+
+Current completed architecture:
+
+```text
+Producer → Kafka → Spark Structured Streaming → Saved Spark ML Model → Console Predictions
+```
+
+Next phase:
+
+```text
+Phase 9 — Store prediction results in MongoDB
+```
+
+---
+
+## 3. Architecture
+
+### Current Working Architecture
+
+```text
+Reviews.csv
+   ↓
+producer.py
+   ↓
+Kafka topic: amazon_reviews
+   ↓
+predict_stream.py
+   ↓
+Saved Spark PipelineModel
+   ↓
+Real-time sentiment prediction
+   ↓
+Console output
+```
+
+### Target Architecture After Phase 9
+
+```text
+Reviews.csv
+   ↓
+Kafka Producer
+   ↓
+Kafka
+   ↓
+Spark Structured Streaming
+   ↓
+Spark ML Prediction
+   ↓
+MongoDB
+   ↓
+Dashboard
+```
+
+---
+
+## 4. Dataset
 
 The project uses the **Amazon Fine Food Reviews** dataset.
 
@@ -44,9 +133,9 @@ Main columns used:
 | Column | Description |
 |---|---|
 | `Text` | Review text |
-| `Score` | Rating from 1 to 5 |
+| `Score` | Review rating from 1 to 5 |
 
-Sentiment labels are generated from `Score`:
+Sentiment labels are derived from `Score`:
 
 | Score condition | Label |
 |---|---|
@@ -54,48 +143,16 @@ Sentiment labels are generated from `Score`:
 | `Score == 3` | `neutral` |
 | `Score > 3` | `positive` |
 
-The raw dataset is intentionally excluded from Git because it is large and can be downloaded separately.
+The raw dataset is excluded from Git because it is large and should remain local.
 
 ---
 
-## 3. Current Project Status
-
-Completed:
-
-- Kafka producer for streaming review events.
-- Basic Kafka consumer for validation/debugging.
-- Initial Python/sklearn experimentation pipeline.
-- Spark-only ML training pipeline.
-- Train/validation/test split.
-- Class-weighted Logistic Regression.
-- TF-IDF feature extraction in Spark.
-- Unigram + bigram feature engineering.
-- Simulated Annealing hyperparameter tuning.
-- Final Spark `PipelineModel` training and local saving.
-- Validation and test evaluation.
-
-Current next phase:
-
-```text
-Phase 8 — Spark Structured Streaming inference
-```
-
-Goal of Phase 8:
-
-```text
-Kafka → Spark Structured Streaming → Load saved Spark PipelineModel → Predict sentiment
-```
-
-MongoDB integration starts after this streaming inference step is validated.
-
----
-
-## 4. Repository Structure
+## 5. Repository Structure
 
 Current production-oriented structure:
 
 ```text
-BIG-DATA-PROJECT/
+BIG DATA PROJECT/
 │
 ├── data/
 │   └── raw/
@@ -109,7 +166,8 @@ BIG-DATA-PROJECT/
 │   └── docker-compose.yml
 │
 ├── results/
-│   └── spark_sa_tuning_results.md
+│   ├── spark_sa_tuning_results.md
+│   └── spark_sa_tuning_results.csv
 │
 ├── src/
 │   ├── __init__.py
@@ -130,7 +188,7 @@ BIG-DATA-PROJECT/
 │   │
 │   └── spark/
 │       ├── model/
-│       │   └── sentiment_pipeline_model/      # local artifact, ignored by Git
+│       │   └── sentiment_pipeline_model/       # local artifact, ignored by Git
 │       │
 │       ├── training/
 │       │   ├── train_spark_pipeline.py
@@ -145,60 +203,32 @@ BIG-DATA-PROJECT/
 └── .gitignore
 ```
 
-### Folder meaning
+### Folder Roles
 
 | Folder | Purpose |
 |---|---|
 | `src/ingestion/` | Kafka producer and ingestion logic |
-| `src/experiments/` | Early experimentation code using Python/sklearn |
-| `src/spark/training/` | Production-oriented Spark ML training and tuning |
-| `src/spark/streaming/` | Spark streaming inference code |
-| `src/spark/model/` | Locally saved Spark model artifact |
-| `results/` | Tuning results and experiment outputs |
+| `src/experiments/` | Early Python/sklearn experimentation code |
+| `src/spark/training/` | Production Spark ML training and tuning |
+| `src/spark/streaming/` | Spark streaming prediction logic |
+| `src/spark/model/` | Local saved Spark model artifact |
+| `results/` | Tuning results |
 | `docs/` | Technical reports and project documentation |
 
 ---
 
-## 5. Architecture Overview
+## 6. Completed Phases
 
-### Current offline training architecture
+### Phase 1 — Kafka Ingestion
 
-```text
-Reviews.csv
-→ Spark DataFrame
-→ Label generation
-→ Train/validation/test split
-→ Class weights
-→ Spark ML Pipeline
-→ Validation tuning
-→ Final test evaluation
-→ Save Spark PipelineModel
-```
+Implemented:
 
-### Target online inference architecture
+- Kafka and Zookeeper using Docker.
+- Topic: `amazon_reviews`.
+- Producer that streams review events from `Reviews.csv`.
+- Basic consumer for inspection/debugging.
 
-```text
-Reviews.csv
-→ Kafka Producer
-→ Kafka topic: amazon_reviews
-→ Spark Structured Streaming
-→ Load saved Spark PipelineModel
-→ Predict sentiment
-→ Console output
-→ MongoDB later
-```
-
----
-
-## 6. Kafka Ingestion
-
-Kafka topic:
-
-```text
-amazon_reviews
-```
-
-Message format:
+Kafka message format:
 
 ```json
 {
@@ -207,17 +237,52 @@ Message format:
 }
 ```
 
-The producer reads reviews from the local CSV dataset and sends them as JSON events to Kafka.
+### Phase 2 — Early Text Preprocessing
 
-The `score` field is included for debugging and validation. The streaming prediction model must predict sentiment from the review text, not from the score.
+Implemented in the experimentation layer:
+
+- Lowercasing.
+- Regex cleaning.
+- Stopword removal.
+- Lemmatization.
+- sklearn TF-IDF.
+
+This phase helped validate the ML idea, but it was later replaced for production by a Spark-only pipeline.
+
+### Phase 3 — Dataset Creation
+
+Implemented:
+
+- CSV loading.
+- Score-to-label conversion.
+- Train/validation/test split.
+- Stratification in the early experimentation pipeline.
+
+### Phase 4 to 7 — Training, Validation, Testing, Model Selection
+
+Implemented:
+
+- Logistic Regression baseline.
+- Confusion matrix.
+- Precision, recall, F1-score per class.
+- Handling of class imbalance.
+- Transition from hybrid sklearn/Spark pipeline to Spark-only production training.
+
+### Phase 8 — Spark Streaming Inference
+
+Implemented and validated:
+
+```text
+Producer → Kafka → Spark Structured Streaming → Saved Spark ML Model → Console Predictions
+```
 
 ---
 
 ## 7. Spark ML Training Pipeline
 
-The production-oriented model is implemented fully with Spark ML components.
+The production model is implemented fully with Spark ML components.
 
-Pipeline stages:
+Final training pipeline:
 
 ```text
 text
@@ -240,100 +305,52 @@ unigram TF-IDF features
 bigram TF-IDF features
 ```
 
-This was selected because using bigrams alone performed worse, while combining unigrams and bigrams improved the validation metrics significantly.
+This design was selected because:
+
+- Unigrams preserve individual sentiment words.
+- Bigrams capture phrase-level sentiment such as `not good`, `not worth`, and `waste money`.
+- Bigrams alone performed worse.
+- Unigrams + bigrams significantly improved validation metrics.
 
 ---
 
-## 8. Labeling and Splitting
+## 8. Model Tuning Summary
 
-Labeling rule:
+Tuning methods used:
 
-```python
-Score < 3   → negative
-Score == 3  → neutral
-Score > 3   → positive
-```
+- Manual parameter tuning.
+- Class weighting for imbalance.
+- Simulated Annealing hyperparameter search.
+- Feature engineering comparison:
+  - unigrams only
+  - bigrams only
+  - unigrams + bigrams
 
-Split strategy:
-
-```text
-Train:      80%
-Validation: 10%
-Test:       10%
-```
-
-The model is trained only on the training set.
-
-The validation set is used for model selection and hyperparameter tuning.
-
-The test set is used once for final evaluation after tuning.
-
----
-
-## 9. Class Imbalance Handling
-
-The dataset is imbalanced:
-
-```text
-positive = dominant class
-negative = minority class
-neutral  = smallest class
-```
-
-To reduce majority-class bias, class weights are computed from the training data:
-
-```text
-class_weight = total_training_rows / (number_of_classes × class_count)
-```
-
-The observed class weights during the final 100k training run were approximately:
-
-```text
-positive -> 0.4348
-negative -> 2.1826
-neutral  -> 4.1318
-```
-
-These weights are passed to Spark Logistic Regression using `weightCol="class_weight"`.
-
----
-
-## 10. Hyperparameter Tuning
-
-The model was improved through manual tuning and Simulated Annealing.
-
-Tuned parameters:
+Main tuned parameters:
 
 | Parameter | Meaning |
 |---|---|
 | `vocab_size` | Maximum vocabulary size for CountVectorizer |
-| `min_df` | Minimum document frequency required to keep a term |
-| `max_iter` | Maximum number of Logistic Regression optimization iterations |
+| `min_df` | Minimum document frequency for keeping a term |
+| `max_iter` | Maximum Logistic Regression optimization iterations |
 | `reg_param` | Regularization strength |
-| `use_bigrams` | Whether unigram + bigram features are used |
+| `use_bigrams` | Whether bigram features are included |
 
-### Simulated Annealing
-
-The tuning script is:
+Primary metric:
 
 ```text
-src/spark/training/tune_spark_pipeline_sa.py
+Macro F1
 ```
 
-The tuner:
+Reason:
 
-1. Starts from an initial configuration.
-2. Generates a neighboring configuration.
-3. Trains a Spark pipeline on the training set.
-4. Evaluates it on the validation set.
-5. Optimizes primarily by `macro_f1`.
-6. Saves results to Markdown and CSV.
-
-`macro_f1` was selected because accuracy alone is misleading on imbalanced data.
+```text
+The dataset is imbalanced, so accuracy alone can hide weak minority-class performance.
+```
 
 ---
 
-## 11. Final Selected Model
+## 9. Final Model Metrics
 
 Final selected configuration:
 
@@ -347,19 +364,7 @@ pipeline = build_pipeline(
 )
 ```
 
-This configuration was selected because it achieved the best validation macro F1 while keeping the model smaller and more efficient than larger vocabulary alternatives.
-
-Approximate feature size:
-
-```text
-10000 unigram features + 10000 bigram features = about 20000 total features
-```
-
----
-
-## 12. Final Metrics
-
-### Validation metrics
+### Validation Metrics
 
 ```text
 Accuracy    = 0.8159
@@ -369,7 +374,7 @@ Negative F1 = 0.6419
 Neutral F1  = 0.3961
 ```
 
-### Test metrics
+### Test Metrics
 
 ```text
 Accuracy    = 0.8130
@@ -381,34 +386,108 @@ Neutral F1  = 0.3470
 
 Interpretation:
 
-- Accuracy and positive F1 remained stable from validation to test.
-- Negative F1 generalized well and improved on the test set.
-- Neutral F1 remains the weakest and most unstable class.
-- The model is acceptable as a production baseline before moving to streaming inference.
+- Positive class is stable.
+- Negative class generalizes well.
+- Neutral remains the weakest class.
+- Overall validation and test results are close enough for a production baseline.
 
 ---
 
-## 13. Model Artifact
+## 10. Phase 8: Streaming Inference
 
-The trained Spark model is saved locally at:
+Streaming inference is implemented in:
 
 ```text
-src/spark/model/sentiment_pipeline_model
+src/spark/streaming/predict_stream.py
 ```
 
-This folder is a generated artifact and should not be committed to Git.
+The script:
 
-It can be recreated by running:
+1. Creates a Spark session.
+2. Loads the saved Spark `PipelineModel`.
+3. Reads Kafka messages from topic `amazon_reviews`.
+4. Parses JSON messages.
+5. Applies the saved model using `model.transform()`.
+6. Converts numeric predictions to readable labels.
+7. Prints predictions to console.
 
-```bash
-spark-submit src/spark/training/train_spark_pipeline.py
+Output columns:
+
+| Column | Meaning |
+|---|---|
+| `text_preview` | Short preview of review text |
+| `score` | Original score from dataset, used only for checking |
+| `prediction` | Numeric Spark prediction |
+| `predicted_label` | Human-readable sentiment label |
+| `probability` | Probability vector |
+
+Important:
+
+```text
+The streaming script does not train.
+It only loads the saved model and predicts.
 ```
 
 ---
 
-## 14. Git and Data Rules
+## 11. How to Run the Project
 
-The following should not be committed:
+### 11.1 Enter Project Directory in WSL
+
+```bash
+cd "/mnt/c/Users/Me/Desktop/END TO END DATA ENGINEERING PROJECTS/BIG DATA PROJECT"
+source ../env/big_data_env/bin/activate
+export PYTHONPATH=$PWD
+```
+
+### 11.2 Start Kafka
+
+In terminal 1:
+
+```bash
+cd kafka
+docker compose up
+```
+
+Keep this terminal running.
+
+### 11.3 Run Spark Streaming Prediction
+
+In terminal 2, from project root:
+
+```bash
+source ../env/big_data_env/bin/activate
+export PYTHONPATH=$PWD
+
+spark-submit \
+  --packages org.apache.spark:spark-sql-kafka-0-10_2.12:3.2.4 \
+  src/spark/streaming/predict_stream.py
+```
+
+Keep this terminal running.
+
+### 11.4 Run Producer
+
+In terminal 3, from project root:
+
+```bash
+source ../env/big_data_env/bin/activate
+export PYTHONPATH=$PWD
+
+python src/ingestion/producer.py
+```
+
+Expected result:
+
+```text
+Spark console output shows streaming batches with predicted sentiment labels.
+```
+
+---
+
+## 12. Git and Artifact Rules
+
+Do not commit:
 
 ```text
 data/raw/Reviews.csv
@@ -417,6 +496,9 @@ src/spark/models/
 *.model
 __pycache__/
 *.pyc
+spark-warehouse/
+metastore_db/
+derby.log
 ```
 
 Recommended `.gitignore` entries:
@@ -446,141 +528,66 @@ env/
 big_data_env/
 ```
 
----
+Commit source code, documentation, and lightweight results summaries.
 
-## 15. Running the Training Pipeline
-
-From the project root in WSL:
-
-```bash
-source ../env/big_data_env/bin/activate
-export PYTHONPATH=$PWD
-```
-
-Run final training:
+Do not commit the saved model artifact. It can be regenerated by running:
 
 ```bash
 spark-submit src/spark/training/train_spark_pipeline.py
 ```
 
-Clean output version:
+---
 
-```bash
-spark-submit src/spark/training/train_spark_pipeline.py 2>/dev/null | grep -E "==========|Accuracy|Macro F1|Positive F1|Negative F1|Neutral F1|Model saved"
-```
+## 13. Next Phase: MongoDB Storage
 
-Expected output includes:
+Phase 9 objective:
 
 ```text
-Model saved to: src/spark/model/sentiment_pipeline_model
+Spark streaming predictions → MongoDB
 ```
+
+Target architecture:
+
+```text
+Producer → Kafka → Spark Structured Streaming → Sentiment Prediction → MongoDB
+```
+
+Phase 9 should be implemented incrementally:
+
+1. Add MongoDB container.
+2. Test MongoDB connection.
+3. Write one simple document.
+4. Add a MongoDB writer for prediction rows.
+5. Integrate MongoDB write into Spark Structured Streaming.
+6. Keep console output temporarily for debugging.
+7. Validate stored predictions in MongoDB.
+
+Phase 9 must remain efficient and should not redesign completed phases.
 
 ---
 
-## 16. Running the Simulated Annealing Tuner
+## 14. Future Work
 
-From the project root:
+Planned future improvements:
 
-```bash
-export PYTHONPATH=$PWD
-```
+- Store predictions in MongoDB.
+- Build dashboard on MongoDB data.
+- Add monitoring and logging.
+- Add Airflow orchestration.
+- Train on the full dataset if needed.
+- Test additional ML models:
+  - Naive Bayes
+  - Linear SVC
+  - One-vs-Rest
+  - Voting ensemble
+  - Stacking ensemble
 
-Run:
-
-```bash
-spark-submit src/spark/training/tune_spark_pipeline_sa.py
-```
-
-Clean output version:
-
-```bash
-spark-submit src/spark/training/tune_spark_pipeline_sa.py 2>/dev/null | grep -E "INITIAL|SA STEP|Temperature|Current config|Candidate config|Macro F1|Accepted|BEST|Accuracy|Positive F1|Negative F1|Neutral F1|Saved"
-```
-
-Results are saved under:
-
-```text
-results/spark_sa_tuning_results.md
-results/spark_sa_tuning_results.csv
-```
-
----
-
-## 17. Next Phase
-
-Next implementation step:
-
-```text
-Spark Structured Streaming inference
-```
-
-Required behavior:
-
-```text
-1. Start Kafka.
-2. Start Spark streaming prediction job.
-3. Load saved Spark PipelineModel.
-4. Read events from Kafka topic `amazon_reviews`.
-5. Parse JSON messages.
-6. Apply `model.transform()`.
-7. Display predicted sentiment in console.
-```
-
-This phase must not train a model.
-
-The saved model should be loaded from:
-
-```text
-src/spark/model/sentiment_pipeline_model
-```
-
----
-
-## 18. Future Work
-
-Planned next phases:
-
-| Phase | Goal |
-|---|---|
-| Phase 8 | Spark Structured Streaming prediction |
-| Phase 9 | Store predictions in MongoDB |
-| Phase 10 | Build dashboard |
-| Phase 11 | Add monitoring/logging |
-| Phase 12 | Add Airflow orchestration |
-| Later | Test additional models and ensemble ML |
-
-Possible future ML improvements:
-
-- Naive Bayes.
-- Linear SVC.
-- One-vs-Rest classifiers.
-- Ensemble voting.
-- Stacking.
-- Larger-scale full-dataset retraining.
-- More advanced text preprocessing.
-
----
-
-## 19. Current Production Baseline
-
-The current production baseline is:
+Current production baseline:
 
 ```text
 Spark ML PipelineModel
-TF-IDF features
+TF-IDF
 Unigrams + bigrams
 Class-weighted Logistic Regression
 Simulated Annealing tuned hyperparameters
 ```
-
-Final selected parameters:
-
-```text
-vocab_size = 10000
-min_df = 4
-max_iter = 15
-reg_param = 0.000025
-use_bigrams = True
-```
-
-The model is saved locally and ready to be loaded by the Spark streaming inference pipeline.
