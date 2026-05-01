@@ -1,1 +1,0 @@
-{"class":"org.apache.spark.ml.feature.IDFModel","timestamp":1777585522024,"sparkVersion":"3.2.4","uid":"IDF_15afeba4b0cb","paramMap":{"outputCol":"unigram_features","inputCol":"unigram_raw_features"},"defaultParamMap":{"outputCol":"IDF_15afeba4b0cb__output","minDocFreq":0}}

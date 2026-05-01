@@ -17,7 +17,7 @@ from pyspark.ml.classification import LogisticRegression
 DATA_PATH = "data/raw/Reviews.csv"
 MODEL_OUTPUT_PATH = "src/spark/model/sentiment_pipeline_model"
 
-SAMPLE_SIZE = 100000 # 100k for debugging
+SAMPLE_SIZE = None # means full-data
 
 TRAIN_RATIO = 0.8
 VAL_RATIO = 0.1

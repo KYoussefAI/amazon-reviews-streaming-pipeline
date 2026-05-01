@@ -1,6 +1,6 @@
 # Amazon Reviews Real-Time Sentiment Analysis Pipeline
 
-A production-oriented Big Data project for real-time sentiment analysis on Amazon review events using Kafka, Apache Spark Structured Streaming, Spark ML, MongoDB, and a future dashboard layer.
+A production-oriented Big Data project for real-time sentiment analysis on Amazon review events using Kafka, Apache Spark Structured Streaming, Spark ML, MongoDB, and a dashboard layer.
 
 The project is built phase by phase to simulate a real data engineering workflow: ingestion, distributed processing, machine learning inference, persistent storage, visualization, and orchestration.
 
@@ -16,13 +16,13 @@ The project is built phase by phase to simulate a real data engineering workflow
 6. [Completed Phases](#6-completed-phases)
 7. [Spark ML Training Pipeline](#7-spark-ml-training-pipeline)
 8. [Model Tuning Summary](#8-model-tuning-summary)
-9. [Final Model Metrics](#9-final-model-metrics)
+9. [Final Full-Data Model Metrics](#9-final-full-data-model-metrics)
 10. [Phase 8: Streaming Inference](#10-phase-8-streaming-inference)
 11. [Phase 9: MongoDB Storage](#11-phase-9-mongodb-storage)
 12. [How to Run the Project](#12-how-to-run-the-project)
 13. [MongoDB Validation Commands](#13-mongodb-validation-commands)
 14. [Git and Artifact Rules](#14-git-and-artifact-rules)
-15. [Next Step: Full-Data Training](#15-next-step-full-data-training)
+15. [Next Phase: Dashboard](#15-next-phase-dashboard)
 16. [Future Work](#16-future-work)
 
 ---
@@ -63,6 +63,7 @@ Completed:
 - Unigram + bigram feature engineering.
 - Simulated Annealing hyperparameter tuning.
 - Final Spark `PipelineModel` training and local saving.
+- Full-data model refresh using all available rows from `Reviews.csv`.
 - Spark Structured Streaming inference from Kafka.
 - MongoDB container added to Docker Compose.
 - Python MongoDB connection tested with `pymongo`.
@@ -72,19 +73,20 @@ Completed:
 Current completed architecture:
 
 ```text
-Producer → Kafka → Spark Structured Streaming → Saved Spark ML Model → MongoDB
+Producer → Kafka → Spark Structured Streaming → Full-data Spark ML Model → MongoDB
 ```
 
 Current phase status:
 
 ```text
 Phase 9 — MongoDB Storage: completed and validated
+Full-data model training: completed and validated in streaming
 ```
 
-Next engineering step:
+Next phase:
 
 ```text
-Full-data model training using all available Reviews.csv rows
+Phase 10 — Dashboard from MongoDB data
 ```
 
 ---
@@ -136,7 +138,7 @@ Dashboard
 | Spark Structured Streaming | Reads Kafka events and processes them as micro-batches |
 | Spark ML `PipelineModel` | Applies the saved sentiment model without retraining |
 | MongoDB | Stores prediction results permanently as documents |
-| Dashboard | Future layer that reads MongoDB data for visualization |
+| Dashboard | Reads MongoDB data for visualization and monitoring |
 
 ---
 
@@ -164,6 +166,14 @@ Sentiment labels are derived from `Score`:
 | `Score < 3` | `negative` |
 | `Score == 3` | `neutral` |
 | `Score > 3` | `positive` |
+
+Full dataset class distribution observed during full-data training:
+
+| Label | Count |
+|---|---:|
+| positive | 442,319 |
+| negative | 83,623 |
+| neutral | 42,502 |
 
 Important:
 
@@ -323,6 +333,14 @@ Implemented and validated:
 Producer → Kafka → Spark Structured Streaming → Saved Spark ML Model → MongoDB
 ```
 
+### Full-Data Model Refresh
+
+Implemented and validated:
+
+```text
+100k tuned model → full-data final model → streaming test → MongoDB validation
+```
+
 ---
 
 ## 7. Spark ML Training Pipeline
@@ -395,10 +413,6 @@ Reason:
 The dataset is imbalanced, so accuracy alone can hide weak minority-class performance.
 ```
 
----
-
-## 9. Final Model Metrics
-
 Final selected configuration:
 
 ```python
@@ -411,39 +425,91 @@ pipeline = build_pipeline(
 )
 ```
 
+---
+
+## 9. Final Full-Data Model Metrics
+
+The final model was trained on the full available Amazon Reviews dataset using:
+
+```python
+SAMPLE_SIZE = None
+```
+
+Full-data split sizes:
+
+| Split | Rows |
+|---|---:|
+| Train | 455,010 |
+| Validation | 56,630 |
+| Test | 56,804 |
+
+Training class distribution:
+
+| Label | Count |
+|---|---:|
+| positive | 353,827 |
+| negative | 66,995 |
+| neutral | 34,188 |
+
+Validation class distribution:
+
+| Label | Count |
+|---|---:|
+| positive | 44,232 |
+| negative | 8,285 |
+| neutral | 4,113 |
+
+Test class distribution:
+
+| Label | Count |
+|---|---:|
+| positive | 44,260 |
+| negative | 8,343 |
+| neutral | 4,201 |
+
+Class weights used during training:
+
+| Label | Weight |
+|---|---:|
+| positive | 0.4287 |
+| negative | 2.2639 |
+| neutral | 4.4364 |
+
 ### Validation Metrics
 
-```text
-Accuracy    = 0.8159
-Macro F1    = 0.6470
-Positive F1 = 0.9031
-Negative F1 = 0.6419
-Neutral F1  = 0.3961
-```
+| Metric | Value |
+|---|---:|
+| Accuracy | 0.8117 |
+| Macro F1 | 0.6723 |
+| Positive F1 | 0.8953 |
+| Negative F1 | 0.7010 |
+| Neutral F1 | 0.4208 |
 
 ### Test Metrics
 
-```text
-Accuracy    = 0.8130
-Macro F1    = 0.6349
-Positive F1 = 0.9018
-Negative F1 = 0.6558
-Neutral F1  = 0.3470
-```
+| Metric | Value |
+|---|---:|
+| Accuracy | 0.8132 |
+| Macro F1 | 0.6733 |
+| Positive F1 | 0.8979 |
+| Negative F1 | 0.6962 |
+| Neutral F1 | 0.4257 |
 
 Interpretation:
 
-- Positive class is stable.
-- Negative class generalizes well.
-- Neutral remains the weakest class.
-- Overall validation and test results are close enough for a production baseline.
+- Validation and test metrics are very close, which indicates good generalization.
+- Positive class remains the strongest because it is the dominant class.
+- Negative class improved clearly after full-data training.
+- Neutral remains the hardest class because 3-star reviews often contain mixed sentiment.
+- The full-data model improves the production baseline compared with the earlier 100k tuned model.
 
-Important:
+Saved model path:
 
 ```text
-These metrics are from the tuned 100k-sample training run.
-Full-data training is the next planned model refresh step.
+src/spark/model/sentiment_pipeline_model
 ```
+
+The saved model directory is ignored by Git because it is a generated local artifact.
 
 ---
 
@@ -482,6 +548,14 @@ Important:
 ```text
 The streaming script does not train.
 It only loads the saved model and predicts.
+```
+
+Label mapping observed during streaming:
+
+```text
+0.0 → positive
+1.0 → negative
+2.0 → neutral
 ```
 
 ---
@@ -551,7 +625,7 @@ This keeps the storage logic separate from the streaming prediction logic and ma
 
 ### Phase 9 Validation Result
 
-MongoDB validation after testing showed:
+Initial MongoDB validation after Phase 9 storage testing showed:
 
 ```text
 Total documents in sentiment_predictions: 801
@@ -559,7 +633,7 @@ Spark streaming documents:               799
 Manual/Python test documents:             2
 ```
 
-Prediction distribution from Spark streaming test:
+Prediction distribution from the initial Spark streaming test:
 
 ```text
 positive = 610
@@ -567,7 +641,21 @@ negative = 128
 neutral  = 61
 ```
 
-This validates that the end-to-end storage pipeline works.
+Final MongoDB validation after the full-data model streaming test showed:
+
+```text
+positive = 1219
+negative = 279
+neutral  = 165
+```
+
+Total Spark streaming documents after the final validation:
+
+```text
+1219 + 279 + 165 = 1663
+```
+
+This validates that the refreshed full-data model is loaded by the streaming script and that predictions are still written correctly to MongoDB.
 
 ---
 
@@ -577,7 +665,7 @@ This validates that the end-to-end storage pipeline works.
 
 ```bash
 cd "/mnt/c/Users/Me/Desktop/END TO END DATA ENGINEERING PROJECTS/BIG DATA PROJECT"
-source env/big_data_env/bin/activate
+source ../env/big_data_env/bin/activate
 export PYTHONPATH=$PWD
 ```
 
@@ -621,7 +709,7 @@ Inserted document id: ...
 In terminal 2, from project root:
 
 ```bash
-source env/big_data_env/bin/activate
+source ../env/big_data_env/bin/activate
 export PYTHONPATH=$PWD
 
 spark-submit \
@@ -641,7 +729,7 @@ Batch X: inserted Y documents into MongoDB.
 In terminal 3, from project root:
 
 ```bash
-source env/big_data_env/bin/activate
+source ../env/big_data_env/bin/activate
 export PYTHONPATH=$PWD
 
 python src/ingestion/producer.py
@@ -652,6 +740,32 @@ Expected result:
 ```text
 Producer sends review events to Kafka.
 Spark consumes them, predicts sentiment, and writes results to MongoDB.
+```
+
+### 12.6 Train the Final Full-Data Model
+
+In `src/spark/training/train_spark_pipeline.py`, use:
+
+```python
+SAMPLE_SIZE = None
+```
+
+Then run:
+
+```bash
+spark-submit src/spark/training/train_spark_pipeline.py
+```
+
+To reduce Spark log noise and keep only metrics:
+
+```bash
+spark-submit src/spark/training/train_spark_pipeline.py 2>/dev/null | grep -A 20 -E "==========|Accuracy|Correct predictions|Total predictions|positive|negative|neutral|label_index|class_index"
+```
+
+The model is saved to:
+
+```text
+src/spark/model/sentiment_pipeline_model
 ```
 
 ---
@@ -777,60 +891,56 @@ Do not commit the saved Spark model artifact. It can be regenerated by running:
 spark-submit src/spark/training/train_spark_pipeline.py
 ```
 
----
-
-## 15. Next Step: Full-Data Training
-
-The current final model was tuned on a 100k sample.
-
-Current training script setting:
-
-```python
-SAMPLE_SIZE = 100000
-```
-
-To train on all available rows from `data/raw/Reviews.csv`, update:
-
-```python
-SAMPLE_SIZE = None
-```
-
-in:
-
-```text
-src/spark/training/train_spark_pipeline.py
-```
-
-Then run:
+Recommended commit after full-data model refresh:
 
 ```bash
-spark-submit src/spark/training/train_spark_pipeline.py
+git add README.md src/spark/training/train_spark_pipeline.py
+git commit -m "Train final Spark sentiment model on full dataset"
+git push origin main
 ```
 
-Expected effect:
+---
+
+## 15. Next Phase: Dashboard
+
+Phase 10 will add the dashboard layer.
+
+Recommended first dashboard version:
 
 ```text
-Spark trains the final PipelineModel using the full local dataset.
-The saved model is written to src/spark/model/sentiment_pipeline_model.
-predict_stream.py automatically loads the refreshed model from the same path.
+MongoDB → Streamlit Dashboard
 ```
 
-Recommended order:
+The dashboard should read directly from:
 
 ```text
-1. Commit Phase 9 MongoDB storage.
-2. Change SAMPLE_SIZE to None.
-3. Run full-data training.
-4. Save the refreshed model.
-5. Re-test streaming prediction to MongoDB.
-6. Start dashboard phase.
+URI: mongodb://localhost:27017
+Database: amazon_reviews_db
+Collection: sentiment_predictions
 ```
 
-Engineering reason:
+The dashboard should initially show:
+
+- Total number of stored predictions.
+- Prediction counts by label: positive, negative, neutral.
+- Sentiment distribution chart.
+- Latest review predictions.
+- Review score versus predicted label for quick sanity checking.
+- Probability/confidence values.
+
+Important engineering rule:
 
 ```text
-Storage integration and full-data model training are separate risks.
-Phase 9 should remain stable and committed before scaling training.
+The dashboard reads MongoDB only.
+It should not read Kafka directly.
+It should not call Spark directly.
+It should not train or predict.
+```
+
+This keeps the architecture clean:
+
+```text
+Producer → Kafka → Spark → MongoDB → Dashboard
 ```
 
 ---
@@ -839,8 +949,9 @@ Phase 9 should remain stable and committed before scaling training.
 
 Planned future improvements:
 
-- Train the final model on the full dataset.
 - Build a dashboard on MongoDB data.
+- Add dashboard filters by predicted label, score, and time.
+- Add refresh behavior for near-real-time monitoring.
 - Add monitoring and logging.
 - Add Airflow orchestration.
 - Add export/import commands for MongoDB snapshots.
@@ -859,5 +970,6 @@ TF-IDF
 Unigrams + bigrams
 Class-weighted Logistic Regression
 Simulated Annealing tuned hyperparameters
+Full-data final training
 Kafka → Spark Structured Streaming → MongoDB storage
 ```

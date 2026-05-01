@@ -1,32 +1,76 @@
-# Raw datasets
+# ============================================================
+# BIG DATA PROJECT — GITIGNORE
+# ============================================================
+
+# ----------------------------
+# Raw datasets / local data
+# ----------------------------
 data/raw/Reviews.csv
+data/raw/*.csv
 
-# Python
+# Optional local database/export snapshots
+exports/mongodb/
+backups/mongodb/
+
+# ----------------------------
+# Python environments / cache
+# ----------------------------
 __pycache__/
-*.pyc
+*.py[cod]
+*$py.class
 .venv/
+venv/
+env/
+big_data_env/
+.env
 
-# Spark
+# ----------------------------
+# Python packaging / test cache
+# ----------------------------
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+build/
+dist/
+*.egg-info/
+
+# ----------------------------
+# Spark generated files
+# ----------------------------
 *.crc
 _SUCCESS
 checkpoint/
 checkpoints/
 spark-warehouse/
 metastore_db/
+derby.log
 
-# Models / large generated artifacts
-src/spark/models/
-src/ml/models/
-
-# Logs
-*.log
-
-# Spark trained models
+# ----------------------------
+# Spark trained models / generated artifacts
+# ----------------------------
 src/spark/model/
 src/spark/models/
+src/ml/models/
 *.model
 
-project_progress.md
+# ----------------------------
+# Logs
+# ----------------------------
+*.log
+logs/
 
-exports/mongodb/
-backups/mongodb/
+# ----------------------------
+# Local notes / temporary progress files
+# ----------------------------
+project_progress.md
+project_progress_for_teammates.md
+
+# ----------------------------
+# OS / editor files
+# ----------------------------
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
