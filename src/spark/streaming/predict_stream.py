@@ -7,6 +7,7 @@ from pyspark.sql.types import StructType, StructField, StringType, IntegerType
 
 from pyspark.ml import PipelineModel
 
+from src.storage.mongodb_writer import write_predictions_to_mongodb
 
 PROJECT_ROOT = os.getcwd()
 
@@ -122,17 +123,18 @@ def main():
         build_prediction_label_column(labels)
     ).select(
         F.substring("text", 1, 120).alias("text_preview"),
+        "text",
         "score",
         "prediction",
         "predicted_label",
         "probability"
     )
-    print("========== STREAMING PREDICTIONS STARTED ==========")
+
+    print("========== STREAMING PREDICTIONS TO MONGODB STARTED ==========")
 
     query = output_df.writeStream \
-        .format("console") \
+        .foreachBatch(write_predictions_to_mongodb) \
         .outputMode("append") \
-        .option("truncate", "false") \
         .start()
 
     query.awaitTermination()

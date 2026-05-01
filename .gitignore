@@ -27,3 +27,6 @@ src/spark/models/
 *.model
 
 project_progress.md
+
+exports/mongodb/
+backups/mongodb/
