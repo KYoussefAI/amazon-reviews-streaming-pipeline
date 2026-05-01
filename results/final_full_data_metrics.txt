@@ -1,0 +1,25 @@
+========== FULL DATA CLASS DISTRIBUTION ==========
+positive: 442319
+negative: 83623
+neutral: 42502
+
+========== SPLIT SIZES ==========
+Train rows: 455010
+Validation rows: 56630
+Test rows: 56804
+
+========== VALIDATION METRICS ==========
+Accuracy:    0.8117
+Macro F1:    0.6723
+Positive F1: 0.8953
+Negative F1: 0.7010
+Neutral F1:  0.4208
+
+========== TEST METRICS ==========
+Accuracy:    0.8132
+Macro F1:    0.6733
+Positive F1: 0.8979
+Negative F1: 0.6962
+Neutral F1:  0.4257
+
+Model saved to: src/spark/model/sentiment_pipeline_model
