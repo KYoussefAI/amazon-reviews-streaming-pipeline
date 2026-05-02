@@ -630,7 +630,7 @@ data/processed/test_reviews.jsonl
 Generate this file before running the producer:
 
 ```bash
-spark-submit src/ingestion/export_test_split_for_streaming.py
+spark-submit src/spark/training/export_test_split_for_streaming.py
 ```
 
 ---
