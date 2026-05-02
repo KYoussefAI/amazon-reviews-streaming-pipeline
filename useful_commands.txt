@@ -1,332 +1,87 @@
-# BIG DATA PROJECT — USEFUL COMMANDS
-# Keep this file in the project root.
-# Project root:
-# /mnt/c/Users/Me/Desktop/END TO END DATA ENGINEERING PROJECTS/BIG DATA PROJECT
+# BIG DATA PROJECT — SHORT COMMANDS
 
 ============================================================
-0) GO TO PROJECT ROOT + ACTIVATE ENV
+1) DAILY PROJECT START
 ============================================================
 
-cd "/mnt/c/Users/Me/Desktop/END TO END DATA ENGINEERING PROJECTS/BIG DATA PROJECT"
-
-# Use the env path that exists on your machine.
-# If the env is inside the project:
-source big_data_env/bin/activate
-
-# If the env is outside the project:
-source ../env/big_data_env/bin/activate
-
-# If you are not sure where the env is:
-find .. -maxdepth 3 -type f -path "*/bin/activate" 2>/dev/null
-
-# Make project imports work for Spark/Python scripts:
-export PYTHONPATH=$PWD
+bigdata
 
 
 ============================================================
-1) DOCKER / KAFKA / MONGODB
+2) RUN FULL STREAMING PIPELINE
 ============================================================
 
-# Start all services from the kafka folder:
-cd kafka
-docker compose up -d
+# Terminal 1 — Kafka/MongoDB
+bd-kafka
 
-# Show running services:
-docker compose ps
+# Terminal 2 — Spark Streaming to MongoDB
+bd-spark
 
-# Stop services but keep data volumes:
-docker compose down
+# Terminal 3 — Test-set Producer
+bd-producer
 
-# Stop services and DELETE volumes/data. Use carefully:
-docker compose down -v
-
-# View logs:
-docker compose logs -f
-
-# View only Kafka logs:
-docker compose logs -f kafka
-
-# View only MongoDB logs:
-docker compose logs -f mongodb
-
-# Return to project root:
-cd ..
+# Terminal 4 — Streamlit Dashboard
+bd-streamlit
 
 
 ============================================================
-2) ENTER KAFKA CONTAINER
+3) EXPORT TEST SPLIT FOR STREAMING
 ============================================================
 
-# Your Kafka container is usually named kafka-kafka-1.
-# Check exact name:
-docker ps
-
-# Enter Kafka container:
-docker exec -it kafka-kafka-1 bash
-
-# Inside the Kafka container, Kafka scripts are usually available in PATH.
+bd-test-export
 
 
 ============================================================
-3) KAFKA TOPIC COMMANDS
+4) MONGODB QUICK CHECKS
 ============================================================
 
-# Run these INSIDE the Kafka container unless your Kafka CLI is installed locally.
+bd-mongo
 
-# List topics:
-kafka-topics --bootstrap-server localhost:9092 --list
-
-# Describe topic:
-kafka-topics --bootstrap-server localhost:9092 --describe --topic amazon_reviews
-
-# Create topic manually if needed:
-kafka-topics \
-  --bootstrap-server localhost:9092 \
-  --create \
-  --topic amazon_reviews \
-  --partitions 1 \
-  --replication-factor 1
-
-# Delete topic if you need a clean Kafka stream:
-kafka-topics \
-  --bootstrap-server localhost:9092 \
-  --delete \
-  --topic amazon_reviews
-
-
-============================================================
-4) KAFKA CONSOLE PRODUCER / CONSUMER
-============================================================
-
-# INSIDE Kafka container.
-
-# Console consumer from beginning:
-kafka-console-consumer \
-  --topic amazon_reviews \
-  --from-beginning \
-  --bootstrap-server localhost:9092
-
-# Console consumer from latest messages only:
-kafka-console-consumer \
-  --topic amazon_reviews \
-  --bootstrap-server localhost:9092
-
-# Console producer for manual tests:
-kafka-console-producer \
-  --topic amazon_reviews \
-  --bootstrap-server localhost:9092
-
-# Example manual JSON message to type into console producer:
-{"text":"This product is amazing and I love it","score":5}
-
-
-============================================================
-5) RUN PROJECT PRODUCER
-============================================================
-
-# From project root:
-cd "/mnt/c/Users/Me/Desktop/END TO END DATA ENGINEERING PROJECTS/BIG DATA PROJECT"
-source big_data_env/bin/activate 2>/dev/null || source ../env/big_data_env/bin/activate
-export PYTHONPATH=$PWD
-
-python src/ingestion/producer.py
-
-
-============================================================
-6) SPARK TRAINING
-============================================================
-
-# Train final Spark ML pipeline.
-# SAMPLE_SIZE=None in train_spark_pipeline.py means full dataset.
-# SAMPLE_SIZE=100000 means debugging/tuning sample.
-
-cd "/mnt/c/Users/Me/Desktop/END TO END DATA ENGINEERING PROJECTS/BIG DATA PROJECT"
-source big_data_env/bin/activate 2>/dev/null || source ../env/big_data_env/bin/activate
-export PYTHONPATH=$PWD
-
-spark-submit src/spark/training/train_spark_pipeline.py
-
-# Cleaner output only:
-spark-submit src/spark/training/train_spark_pipeline.py 2>/dev/null | grep -A 20 -E "==========|Accuracy|Macro F1|Correct predictions|Total predictions|positive|negative|neutral|label_index|class_index"
-
-# Safer memory version:
-spark-submit \
-  --driver-memory 8g \
-  --conf spark.sql.shuffle.partitions=8 \
-  src/spark/training/train_spark_pipeline.py
-
-
-============================================================
-7) SPARK SIMULATED ANNEALING TUNING
-============================================================
-
-cd "/mnt/c/Users/Me/Desktop/END TO END DATA ENGINEERING PROJECTS/BIG DATA PROJECT"
-source big_data_env/bin/activate 2>/dev/null || source ../env/big_data_env/bin/activate
-export PYTHONPATH=$PWD
-
-spark-submit src/spark/training/tune_spark_pipeline_sa.py
-
-# Cleaner output:
-spark-submit src/spark/training/tune_spark_pipeline_sa.py 2>/dev/null
-
-
-============================================================
-8) SPARK STREAMING PREDICTION TO MONGODB
-============================================================
-
-# Terminal 1 — Start Docker services
-cd "/mnt/c/Users/Me/Desktop/END TO END DATA ENGINEERING PROJECTS/BIG DATA PROJECT/kafka"
-docker compose up -d
-docker compose ps
-
-# Terminal 2 — Start Spark streaming from project root
-cd "/mnt/c/Users/Me/Desktop/END TO END DATA ENGINEERING PROJECTS/BIG DATA PROJECT"
-source big_data_env/bin/activate 2>/dev/null || source ../env/big_data_env/bin/activate
-export PYTHONPATH=$PWD
-
-spark-submit \
-  --packages org.apache.spark:spark-sql-kafka-0-10_2.12:3.2.4 \
-  src/spark/streaming/predict_stream.py
-
-# Terminal 3 — Start Python producer from project root
-cd "/mnt/c/Users/Me/Desktop/END TO END DATA ENGINEERING PROJECTS/BIG DATA PROJECT"
-source big_data_env/bin/activate 2>/dev/null || source ../env/big_data_env/bin/activate
-export PYTHONPATH=$PWD
-
-python src/ingestion/producer.py
-
-# Stop producer or Spark streaming:
-# Press CTRL + C in each terminal.
-
-
-============================================================
-9) MONGODB COMMANDS
-============================================================
-
-# Enter Mongo shell:
-docker exec -it mongodb mongosh
-
-# Inside mongosh:
 use amazon_reviews_db
 
-# Count all documents:
-db.sentiment_predictions.countDocuments()
-
-# Count only Spark streaming predictions:
 db.sentiment_predictions.countDocuments({ source: "spark_structured_streaming" })
 
-# Show latest predictions:
 db.sentiment_predictions.find({
   source: "spark_structured_streaming"
 }).sort({
   processed_at: -1
 }).limit(5).pretty()
 
-# Sentiment distribution:
 db.sentiment_predictions.aggregate([
   { $match: { source: "spark_structured_streaming" } },
   { $group: { _id: "$predicted_label", count: { $sum: 1 } } },
   { $sort: { count: -1 } }
 ])
 
-# Delete only test/manual documents:
-db.sentiment_predictions.deleteMany({ source: { $in: ["manual_test", "python_test"] } })
-
-# Delete all Spark streaming prediction documents. Use carefully:
 db.sentiment_predictions.deleteMany({ source: "spark_structured_streaming" })
 
-# Delete all documents in the collection. Use very carefully:
-db.sentiment_predictions.deleteMany({})
+
+============================================================
+5) TRAINING / TUNING
+============================================================
+
+bd-train
+
+bd-tune
 
 
 ============================================================
-10) MONGODB EXPORT / IMPORT
+6) STATUS CHECK
 ============================================================
 
-# From project root. Export collection to readable JSON:
-mkdir -p exports/mongodb
-
-docker exec mongodb mongoexport \
-  --db amazon_reviews_db \
-  --collection sentiment_predictions \
-  --out /tmp/sentiment_predictions.json \
-  --jsonArray
-
-docker cp mongodb:/tmp/sentiment_predictions.json exports/mongodb/sentiment_predictions.json
-
-# Import JSON into MongoDB on another machine:
-docker cp exports/mongodb/sentiment_predictions.json mongodb:/tmp/sentiment_predictions.json
-
-docker exec mongodb mongoimport \
-  --db amazon_reviews_db \
-  --collection sentiment_predictions \
-  --file /tmp/sentiment_predictions.json \
-  --jsonArray
-
-# Full DB backup:
-mkdir -p backups/mongodb
-
-docker exec mongodb mongodump \
-  --db amazon_reviews_db \
-  --out /tmp/mongo_backup
-
-docker cp mongodb:/tmp/mongo_backup backups/mongodb/mongo_backup
-
-# Restore full DB backup:
-docker cp backups/mongodb/mongo_backup mongodb:/tmp/mongo_backup
-
-docker exec mongodb mongorestore \
-  --db amazon_reviews_db \
-  /tmp/mongo_backup/amazon_reviews_db
+bd-status
 
 
 ============================================================
-11) GIT COMMANDS
+7) GIT
 ============================================================
 
-cd "/mnt/c/Users/Me/Desktop/END TO END DATA ENGINEERING PROJECTS/BIG DATA PROJECT"
+bigdata
 
 git status
 
-git add README.md requirements.txt .gitignore useful_commands.txt \
-  kafka/docker-compose.yml \
-  src/storage/mongodb_writer.py \
-  src/storage/test_mongodb_connection.py \
-  src/spark/streaming/predict_stream.py \
-  src/spark/training/train_spark_pipeline.py
+git add .
 
-git commit -m "Complete MongoDB storage and final full-data model training"
+git commit -m "Complete Phase 10 dashboard and test-set streaming"
 
 git push origin main
-
-
-============================================================
-12) QUICK TROUBLESHOOTING
-============================================================
-
-# Error: no configuration file provided
-# Meaning: you ran docker compose outside the kafka folder.
-cd kafka
-docker compose up -d
-
-# Error: ModuleNotFoundError for src.*
-# Meaning: PYTHONPATH is not set.
-cd "/mnt/c/Users/Me/Desktop/END TO END DATA ENGINEERING PROJECTS/BIG DATA PROJECT"
-export PYTHONPATH=$PWD
-
-# Check Java:
-java -version
-
-# Check Spark:
-spark-submit --version
-
-# Check Python env:
-which python
-python --version
-pip freeze | grep -E "pyspark|kafka|pymongo|pandas|scikit|nltk|streamlit"
-
-# Check Docker containers:
-docker ps
-
-# Check Docker volumes:
-docker volume ls
