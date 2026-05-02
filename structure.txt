@@ -1,11 +1,20 @@
-BIG-DATA-PROJECT/
+BIG DATA PROJECT/
 │
 ├── src/
+│   ├── __init__.py
+│   │
+│   ├── dashboard/
+│   │   └── app.py
+│   │
 │   ├── ingestion/
+│   │   ├── __init__.py
 │   │   └── producer.py
 │   │
 │   ├── experiments/
+│   │   ├── __init__.py
+│   │   │
 │   │   ├── preprocessing/
+│   │   │   ├── __init__.py
 │   │   │   ├── clean.py
 │   │   │   ├── vectorizer.py
 │   │   │   ├── label.py
@@ -13,33 +22,68 @@ BIG-DATA-PROJECT/
 │   │   │   └── resampling.py
 │   │   │
 │   │   └── training/
+│   │       ├── __init__.py
 │   │       └── train.py
 │   │
 │   ├── spark/
 │   │   ├── training/
-│   │   │   └── train_spark_pipeline.py
+│   │   │   ├── __init__.py
+│   │   │   ├── train_spark_pipeline.py
+│   │   │   ├── tune_spark_pipeline_sa.py
+│   │   │   └── export_test_split_for_streaming.py
 │   │   │
 │   │   ├── streaming/
+│   │   │   ├── __init__.py
+│   │   │   ├── consumer.py
 │   │   │   └── predict_stream.py
 │   │   │
-│   │   └── models/
+│   │   └── model/
 │   │       └── sentiment_pipeline_model/
 │   │
-│   ├── storage/
-│   │   └── mongodb_writer.py
-│   │
-│   └── utils/
+│   └── storage/
+│       ├── __init__.py
+│       ├── mongodb_writer.py
+│       └── test_mongodb_connection.py
 │
 ├── data/
-│   └── raw/
-│       └── Reviews.csv
+│   ├── raw/
+│   │   └── Reviews.csv
+│   │
+│   └── processed/
+│       └── test_reviews.jsonl
 │
 ├── kafka/
-│   └── docker-compose.yml
+│   ├── docker-compose.yml
+│   └── topics.md
 │
-├── orchestration/
-│   └── dags/
+├── docs/
+│   ├── PHASE5.md
+│   ├── spark_sentiment_tuning_report.md
+│   └── screenshots/
+│       ├── 01_project_structure.png
+│       ├── 02_docker_services_running.png
+│       ├── 03_full_training_metrics.png
+│       ├── 04_spark_streaming_to_mongodb.png
+│       ├── 05_producer_streaming_reviews.png
+│       ├── 06_mongodb_latest_predictions.png
+│       ├── 09_dashboard_prediction_summary.png
+│       ├── 10_dashboard_main_analytics.png
+│       ├── 11_dashboard_score_analytics.png
+│       └── 12_live_pipeline_overview.png
 │
+├── results/
+│   ├── spark_sa_tuning_results.csv
+│   └── spark_sa_tuning_results.md
+│
+├── exports/
+│   └── reports/
+│
+├── backups/
+│   └── mongodb/
+│
+├── project_context.md
+├── useful_commands.txt
+├── structure.txt
 ├── requirements.txt
 ├── README.md
 └── .gitignore

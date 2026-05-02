@@ -1,129 +1,166 @@
-# Amazon Reviews Real-Time Sentiment Analysis Pipeline
+# Amazon Reviews Real-Time Sentiment Command Center
 
-A production-oriented Big Data project for real-time sentiment analysis on Amazon review events using Kafka, Apache Spark Structured Streaming, Spark ML, MongoDB, and a future dashboard layer.
+A production-oriented Big Data project that streams Amazon review events through Kafka, applies Spark ML sentiment prediction with Spark Structured Streaming, stores predictions in MongoDB, and visualizes operational analytics in a Streamlit dashboard.
 
-The project is built phase by phase to simulate a real data engineering workflow: ingestion, distributed processing, machine learning inference, persistent storage, visualization, and orchestration.
+This project was built phase by phase as a practical data engineering training lab: ingestion, streaming, distributed processing, machine learning inference, storage, dashboarding, validation, and documentation.
 
 ---
 
 ## Table of Contents
 
 1. [Project Objective](#1-project-objective)
-2. [Current Project Status](#2-current-project-status)
+2. [Current Status](#2-current-status)
 3. [Architecture](#3-architecture)
-4. [Dataset](#4-dataset)
-5. [Repository Structure](#5-repository-structure)
-6. [Completed Phases](#6-completed-phases)
-7. [Spark ML Training Pipeline](#7-spark-ml-training-pipeline)
-8. [Model Tuning Summary](#8-model-tuning-summary)
-9. [Final Full-Data Model Metrics](#9-final-full-data-model-metrics)
+4. [Tech Stack](#4-tech-stack)
+5. [Dataset](#5-dataset)
+6. [Repository Structure](#6-repository-structure)
+7. [Completed Phases](#7-completed-phases)
+8. [Spark ML Training Pipeline](#8-spark-ml-training-pipeline)
+9. [Final Model Metrics](#9-final-model-metrics)
 10. [Streaming Inference](#10-streaming-inference)
 11. [MongoDB Storage](#11-mongodb-storage)
-12. [Screenshots](#12-screenshots)
-13. [How to Run the Project](#13-how-to-run-the-project)
-14. [Git and Artifact Rules](#14-git-and-artifact-rules)
-15. [Next Phase: Dashboard](#15-next-phase-dashboard)
-16. [Future Work](#16-future-work)
+12. [Streamlit Dashboard](#12-streamlit-dashboard)
+13. [Screenshots](#13-screenshots)
+14. [How to Run](#14-how-to-run)
+15. [MongoDB Validation Commands](#15-mongodb-validation-commands)
+16. [Git and Artifact Rules](#16-git-and-artifact-rules)
+17. [Future Improvements](#17-future-improvements)
 
 ---
 
 ## 1. Project Objective
 
-The objective is to build a complete real-time Big Data and machine learning pipeline:
+The objective is to build a complete real-time Big Data sentiment analysis pipeline:
 
 ```text
 Amazon Reviews Dataset
 → Kafka
 → Spark Structured Streaming
-→ Spark ML Sentiment Prediction
+→ Spark ML Prediction
 → MongoDB
-→ Dashboard
+→ Streamlit Dashboard
 ```
 
-The fixed target architecture is:
-
-```text
-Producer → Kafka → Spark → MongoDB → Dashboard
-```
-
-The goal is not only to make the system work, but also to understand the role of every component in a realistic data engineering architecture.
+The project simulates a real data engineering workflow where raw events are ingested continuously, processed by a distributed streaming engine, enriched with machine learning predictions, stored in a database, and monitored through a dashboard.
 
 ---
 
-## 2. Current Project Status
-
-Completed:
-
-- Kafka producer that streams Amazon review events.
-- Kafka topic used for review ingestion.
-- Spark-only ML training pipeline.
-- Train/validation/test split.
-- Class-weighted Logistic Regression.
-- TF-IDF feature extraction using Spark ML.
-- Unigram + bigram feature engineering.
-- Simulated Annealing hyperparameter tuning.
-- Final Spark `PipelineModel` training on the full dataset.
-- Spark Structured Streaming inference from Kafka.
-- Real-time sentiment predictions written to MongoDB.
-- MongoDB validation queries for latest predictions, counts, and sentiment distribution.
+## 2. Current Status
 
 Current completed architecture:
 
 ```text
-Producer → Kafka → Spark Structured Streaming → Full-data Spark ML Model → MongoDB
+Producer → Kafka → Spark Structured Streaming → Spark ML Prediction → MongoDB → Dashboard
 ```
 
-Next phase:
+Completed:
+
+- Kafka and Zookeeper running with Docker Compose.
+- MongoDB running as a Docker service.
+- Kafka producer streaming Amazon review events.
+- Spark-only ML training pipeline.
+- TF-IDF feature engineering using unigrams and bigrams.
+- Class-weighted Logistic Regression for imbalanced sentiment classes.
+- Simulated Annealing hyperparameter tuning.
+- Final Spark `PipelineModel` saved locally.
+- Spark Structured Streaming inference from Kafka.
+- Prediction documents written to MongoDB.
+- Streamlit dashboard connected to MongoDB.
+- Dashboard KPIs, charts, filters, live refresh, confidence analytics, risk monitoring, latest events table, and PDF report export.
+
+Next recommended phase:
 
 ```text
-Phase 10 — Dashboard from MongoDB
+Portfolio cleanup → README polish → GitHub push → optional Airflow/Docker improvements
 ```
 
 ---
 
 ## 3. Architecture
 
-### Current Working Architecture
+### High-Level Architecture
 
 ```text
-Reviews.csv
-   ↓
-src/ingestion/producer.py
-   ↓
-Kafka topic: amazon_reviews
-   ↓
-src/spark/streaming/predict_stream.py
-   ↓
-Saved Spark PipelineModel
-   ↓
-Real-time sentiment prediction
-   ↓
-MongoDB
+                ┌──────────────────────┐
+                │  Amazon Reviews CSV  │
+                └──────────┬───────────┘
+                           │
+                           ▼
+                ┌──────────────────────┐
+                │ Kafka Producer       │
+                │ src/ingestion        │
+                └──────────┬───────────┘
+                           │ JSON events
+                           ▼
+                ┌──────────────────────┐
+                │ Kafka Topic          │
+                │ amazon_reviews       │
+                └──────────┬───────────┘
+                           │ stream read
+                           ▼
+                ┌──────────────────────┐
+                │ Spark Structured     │
+                │ Streaming            │
+                └──────────┬───────────┘
+                           │
+                           ▼
+                ┌──────────────────────┐
+                │ Spark ML Pipeline    │
+                │ TF-IDF + LogisticReg │
+                └──────────┬───────────┘
+                           │ predictions
+                           ▼
+                ┌──────────────────────┐
+                │ MongoDB              │
+                │ sentiment_predictions│
+                └──────────┬───────────┘
+                           │ query
+                           ▼
+                ┌──────────────────────┐
+                │ Streamlit Dashboard  │
+                │ Command Center       │
+                └──────────────────────┘
 ```
 
-### Target Architecture
+### Runtime Data Flow
 
 ```text
-Reviews.csv
-   ↓
-Kafka Producer
-   ↓
-Kafka
-   ↓
-Spark Structured Streaming
-   ↓
-Spark ML Prediction
-   ↓
-MongoDB
-   ↓
-Dashboard
+producer.py
+→ Kafka topic: amazon_reviews
+→ predict_stream.py
+→ saved Spark PipelineModel
+→ mongodb_writer.py
+→ amazon_reviews_db.sentiment_predictions
+→ dashboard/app.py
 ```
 
 ---
 
-## 4. Dataset
+## 4. Tech Stack
 
-The project uses the **Amazon Fine Food Reviews** dataset.
+| Layer | Tool |
+|---|---|
+| Programming | Python |
+| Message Broker | Apache Kafka |
+| Containerized Services | Docker Compose |
+| Streaming Processing | Apache Spark Structured Streaming |
+| Machine Learning | Spark MLlib |
+| Feature Engineering | RegexTokenizer, StopWordsRemover, CountVectorizer, IDF, NGram, VectorAssembler |
+| Model | Logistic Regression |
+| Storage | MongoDB |
+| Dashboard | Streamlit + Plotly |
+| Reporting | ReportLab PDF export |
+| Environment | WSL/Linux recommended |
+
+---
+
+## 5. Dataset
+
+Dataset:
+
+```text
+Amazon Fine Food Reviews
+```
 
 Expected local path:
 
@@ -133,26 +170,26 @@ data/raw/Reviews.csv
 
 Main columns used:
 
-| Column | Description |
+| Column | Role |
 |---|---|
-| `Text` | Review text |
-| `Score` | Review rating from 1 to 5 |
+| `Text` | Review text used for prediction |
+| `Score` | Original Amazon rating from 1 to 5 |
 
-Sentiment labels are derived from `Score`:
+Sentiment labeling rule:
 
-| Score condition | Label |
+| Score condition | Sentiment label |
 |---|---|
 | `Score < 3` | `negative` |
 | `Score == 3` | `neutral` |
 | `Score > 3` | `positive` |
 
-The raw dataset is excluded from Git because it is large and must remain local.
+The raw CSV is not committed to Git because it is large.
 
 ---
 
-## 5. Repository Structure
+## 6. Repository Structure
 
-Current production-oriented structure:
+Recommended current structure:
 
 ```text
 BIG DATA PROJECT/
@@ -160,6 +197,16 @@ BIG DATA PROJECT/
 ├── docs/
 │   ├── PHASE5.md
 │   ├── screenshots/
+│   │   ├── 01_project_structure.png
+│   │   ├── 02_docker_services_running.png
+│   │   ├── 03_full_training_metrics.png
+│   │   ├── 04_spark_streaming_to_mongodb.png
+│   │   ├── 05_producer_streaming_reviews.png
+│   │   ├── 06_mongodb_latest_predictions.png
+│   │   ├── 09_dashboard_prediction_summary.png
+│   │   ├── 10_dashboard_main_analytics.png
+│   │   ├── 11_dashboard_score_analytics.png
+│   │   └── 12_live_pipeline_overview.png
 │   └── spark_sentiment_tuning_report.md
 │
 ├── kafka/
@@ -173,6 +220,9 @@ BIG DATA PROJECT/
 ├── src/
 │   ├── __init__.py
 │   │
+│   ├── dashboard/
+│   │   └── app.py
+│   │
 │   ├── experiments/
 │   │   ├── preprocessing/
 │   │   │   ├── clean.py
@@ -180,18 +230,17 @@ BIG DATA PROJECT/
 │   │   │   ├── label.py
 │   │   │   ├── resampling.py
 │   │   │   └── vectorizer.py
-│   │   │
 │   │   └── training/
 │   │       └── train.py
 │   │
 │   ├── ingestion/
-│   │   └── producer.py
+│   │   ├── producer.py
+│   │   └── export_test_split_for_streaming.py
 │   │
 │   ├── spark/
 │   │   ├── streaming/
 │   │   │   ├── consumer.py
 │   │   │   └── predict_stream.py
-│   │   │
 │   │   └── training/
 │   │       ├── train_spark_pipeline.py
 │   │       └── tune_spark_pipeline_sa.py
@@ -207,190 +256,49 @@ BIG DATA PROJECT/
 └── useful_commands.txt
 ```
 
-Local-only generated folders and files are ignored by Git:
+Local-only generated artifacts:
 
 ```text
 data/raw/
+data/processed/
 src/spark/model/
 src/spark/models/
+spark-warehouse/
+metastore_db/
+exports/
+backups/
 .venv/
 __pycache__/
-exports/mongodb/
-backups/mongodb/
 ```
 
 ---
 
-## 6. Completed Phases
+## 7. Completed Phases
 
-### Phase 1 — Kafka Streaming
-
-Built:
-
-- Kafka and Zookeeper using Docker Compose.
-- Kafka topic: `amazon_reviews`.
-- Producer that streams Amazon reviews from `Reviews.csv`.
-- Basic consumer for testing.
-
-Kafka message format:
-
-```json
-{
-  "text": "review text here",
-  "score": 5
-}
-```
-
-The `score` is included because the stream replays historical data. The model prediction is based on the review text.
+| Phase | Status | Output |
+|---|---:|---|
+| Phase 1 | Completed | Kafka + Zookeeper + producer + basic consumer |
+| Phase 2 | Completed | Text cleaning and TF-IDF experimentation |
+| Phase 3 | Completed | Dataset creation and train/validation/test split |
+| Phase 4 | Completed | Initial Spark Logistic Regression model |
+| Phase 5 | Completed | Validation metrics and imbalance analysis |
+| Phase 6 | Completed | Final test evaluation |
+| Phase 7 | Completed | Model selection |
+| Phase 8 | Completed | Spark Structured Streaming inference from Kafka |
+| Phase 9 | Completed | MongoDB storage with `foreachBatch` |
+| Phase 10 | Completed | Streamlit dashboard from MongoDB |
 
 ---
 
-### Phase 2 — Data Preparation and TF-IDF Experiments
+## 8. Spark ML Training Pipeline
 
-Built an early Python/sklearn experimentation layer:
-
-- Text cleaning.
-- Lowercasing.
-- Regex cleaning.
-- Stopword removal.
-- Lemmatization.
-- TF-IDF vectorization.
-
-Important learning:
-
-```text
-Fit TF-IDF only on training data.
-Transform validation and test data using the fitted training vectorizer.
-```
-
-This avoids data leakage.
-
----
-
-### Phase 3 — Dataset Creation
-
-Built:
-
-- CSV loading.
-- Text and score selection.
-- Sentiment label creation.
-- Train/validation/test split.
-
-Split:
-
-```text
-Train: 80%
-Validation: 10%
-Test: 10%
-```
-
-The test set is kept untouched until final evaluation.
-
----
-
-### Phase 4 — Initial Spark ML Training
-
-Built an early Spark Logistic Regression model using:
-
-```text
-Python/sklearn TF-IDF
-→ manual conversion to Spark SparseVector
-→ Spark ML Logistic Regression
-```
-
-This was useful for learning, but later replaced with a Spark-only pipeline for production and streaming compatibility.
-
----
-
-### Phase 5 — Validation and Imbalance Handling
-
-Implemented:
-
-- Accuracy.
-- Confusion matrix.
-- Precision.
-- Recall.
-- F1-score per class.
-
-Finding:
-
-```text
-Accuracy alone is not enough because the dataset is imbalanced.
-```
-
-The dataset is dominated by positive reviews, while neutral reviews are the smallest and hardest class.
-
----
-
-### Phase 6 — Testing
-
-The test set was used only after model selection.
-
-Important rule:
-
-```text
-Validation is used for tuning.
-Test is used only for final evaluation.
-```
-
----
-
-### Phase 7 — Model Selection
-
-Selected model family:
-
-```text
-TF-IDF + Logistic Regression
-```
-
-Reason:
-
-- Simple and interpretable.
-- Stable validation and test performance.
-- Good baseline for a real-time streaming pipeline.
-- Easy to save and reload as a Spark `PipelineModel`.
-
----
-
-### Phase 8 — Spark Streaming Inference
-
-Completed:
-
-```text
-Producer → Kafka → Spark Structured Streaming → Saved Spark ML Model → Console Predictions
-```
-
-The script:
-
-```text
-src/spark/streaming/predict_stream.py
-```
-
-loads the saved Spark `PipelineModel`, reads Kafka messages, applies the model, maps numeric predictions back to readable labels, and originally printed results to the console.
-
----
-
-### Phase 9 — MongoDB Storage
-
-Completed:
-
-```text
-Producer → Kafka → Spark Structured Streaming → Spark ML Prediction → MongoDB
-```
-
-MongoDB was added as a persistent storage layer. Spark streaming predictions are written to MongoDB using `foreachBatch`.
-
----
-
-## 7. Spark ML Training Pipeline
-
-The production training file is:
+Production training file:
 
 ```text
 src/spark/training/train_spark_pipeline.py
 ```
 
-The Spark-only pipeline:
+Spark ML pipeline:
 
 ```text
 text
@@ -406,7 +314,7 @@ text
 → Class-weighted Logistic Regression
 ```
 
-The final selected hyperparameters:
+Final selected hyperparameters:
 
 ```python
 vocab_size = 10000
@@ -416,47 +324,19 @@ reg_param = 0.000025
 use_bigrams = True
 ```
 
-The model is saved locally to:
+Saved model path:
 
 ```text
 src/spark/model/sentiment_pipeline_model
 ```
 
-This folder is ignored by Git because it is a generated model artifact.
+The model folder is generated locally and should not be committed.
 
 ---
 
-## 8. Model Tuning Summary
+## 9. Final Model Metrics
 
-Tuning was done with both manual tests and Simulated Annealing.
-
-Tuning file:
-
-```text
-src/spark/training/tune_spark_pipeline_sa.py
-```
-
-The tuning process tested:
-
-- Vocabulary size.
-- Minimum document frequency.
-- Logistic Regression iterations.
-- Regularization.
-- Unigrams vs. unigrams + bigrams.
-
-Important finding:
-
-```text
-Unigrams + bigrams improved minority-class performance.
-```
-
-Macro F1 was the main tuning metric because the dataset is imbalanced.
-
----
-
-## 9. Final Full-Data Model Metrics
-
-The final Spark ML model was trained on the full Amazon Reviews dataset.
+The final full-data training run used valid Amazon review rows after cleaning and filtering.
 
 ### Full Dataset Class Distribution
 
@@ -508,7 +388,7 @@ Total rows:
 | Negative F1 | 0.6953 |
 | Neutral F1 | 0.4266 |
 
-The final model generalizes well because validation and test metrics are close.
+Validation and test metrics are close, so the model generalizes reasonably well for a first production baseline.
 
 ---
 
@@ -520,18 +400,18 @@ Streaming prediction file:
 src/spark/streaming/predict_stream.py
 ```
 
-The script:
+The streaming job:
 
-1. Creates a Spark session.
+1. Starts a Spark session.
 2. Loads the saved Spark `PipelineModel`.
-3. Reads from Kafka topic `amazon_reviews`.
-4. Parses JSON messages.
-5. Adds schema-compatible dummy columns required by the saved pipeline.
-6. Applies model prediction.
-7. Converts numeric prediction to readable sentiment label.
-8. Writes the results to MongoDB.
+3. Reads JSON messages from Kafka topic `amazon_reviews`.
+4. Parses incoming review text and score.
+5. Adds schema-compatible columns needed by the saved pipeline.
+6. Applies the Spark ML model.
+7. Converts numeric predictions into readable sentiment labels.
+8. Writes micro-batch predictions to MongoDB.
 
-The readable label mapping is learned from the saved `StringIndexerModel`. In the current model:
+Current label mapping:
 
 ```text
 0.0 → positive
@@ -543,8 +423,6 @@ The readable label mapping is learned from the saved `StringIndexerModel`. In th
 
 ## 11. MongoDB Storage
 
-MongoDB is used as the persistent storage layer for streaming prediction results.
-
 MongoDB target:
 
 ```text
@@ -553,35 +431,33 @@ Database: amazon_reviews_db
 Collection: sentiment_predictions
 ```
 
-Storage writer file:
+Storage writer:
 
 ```text
 src/storage/mongodb_writer.py
 ```
 
-Spark writes predictions to MongoDB using:
+Spark writes predictions using:
 
 ```python
 foreachBatch(write_predictions_to_mongodb)
 ```
 
-This approach processes each Spark micro-batch as a batch DataFrame and writes documents using `insert_many()`.
-
-Each prediction document contains:
+Each MongoDB document contains:
 
 | Field | Description |
 |---|---|
 | `text_preview` | Short preview of the review text |
 | `text` | Full review text |
-| `score` | Original review score, kept for checking |
+| `score` | Original Amazon score |
 | `prediction` | Numeric Spark prediction |
 | `predicted_label` | Readable sentiment label |
-| `probability` | Model probability distribution |
+| `probability` | Class probability distribution |
 | `batch_id` | Spark micro-batch ID |
-| `processed_at` | Timestamp of MongoDB insertion |
-| `source` | Data source marker |
+| `processed_at` | Insertion timestamp |
+| `source` | Source marker, usually `spark_structured_streaming` |
 
-Example document structure:
+Example document:
 
 ```json
 {
@@ -597,63 +473,113 @@ Example document structure:
 }
 ```
 
-MongoDB validation after the final streaming test:
+---
 
-| Predicted label | Stored documents |
-|---|---:|
-| positive | 1,720 |
-| negative | 391 |
-| neutral | 239 |
+## 12. Streamlit Dashboard
 
-Total Spark streaming prediction documents:
+Dashboard file:
 
 ```text
-2,350
+src/dashboard/app.py
+```
+
+Dashboard title:
+
+```text
+Amazon Reviews Sentiment Command Center
+```
+
+The dashboard connects directly to MongoDB and reads from:
+
+```text
+amazon_reviews_db.sentiment_predictions
+```
+
+Dashboard features:
+
+- MongoDB connection status.
+- Total prediction count.
+- Latest Spark micro-batch ID.
+- Average model confidence.
+- Positive, negative, and neutral prediction counts.
+- Low-confidence prediction count.
+- Sentiment distribution donut chart.
+- Confidence distribution chart.
+- Records per micro-batch line chart.
+- Batch summary table.
+- Amazon score distribution chart.
+- Score by predicted sentiment chart.
+- Average confidence by sentiment chart.
+- Low-confidence prediction monitoring.
+- Suspicious prediction samples.
+- Latest streaming events table.
+- Sidebar filters by sentiment, score, and batch ID.
+- Configurable latest-record limit.
+- Auto-refresh with configurable interval.
+- PDF report export from current dashboard data and filters.
+
+---
+
+## 13. Screenshots
+
+Recommended screenshots to keep in the portfolio README:
+
+| Screenshot | Purpose |
+|---|---|
+| `docs/screenshots/01_project_structure.png` | Shows clean project organization |
+| `docs/screenshots/02_docker_services_running.png` | Proves Kafka, Zookeeper, and MongoDB are running |
+| `docs/screenshots/03_full_training_metrics.png` | Shows final full-data model metrics |
+| `docs/screenshots/04_spark_streaming_to_mongodb.png` | Proves Spark is loading the model and writing micro-batches to MongoDB |
+| `docs/screenshots/05_producer_streaming_reviews.png` | Shows producer sending review events to Kafka |
+| `docs/screenshots/06_mongodb_latest_predictions.png` | Shows stored prediction documents in MongoDB |
+| `docs/screenshots/09_dashboard_prediction_summary.png` | Clean dashboard KPI summary |
+| `docs/screenshots/10_dashboard_main_analytics.png` | Sentiment, confidence, and streaming operations charts |
+| `docs/screenshots/11_dashboard_score_analytics.png` | Score distribution and confidence by class |
+| `docs/screenshots/12_live_pipeline_overview.png` | Optional proof that producer, Spark, MongoDB, and dashboard run together |
+
+Suggested README display:
+
+### Dashboard Summary
+
+![Dashboard prediction summary](docs/screenshots/09_dashboard_prediction_summary.png)
+
+### Main Analytics and Streaming Operations
+
+![Dashboard main analytics](docs/screenshots/10_dashboard_main_analytics.png)
+
+### Score Analytics and Model Confidence
+
+![Dashboard score analytics](docs/screenshots/11_dashboard_score_analytics.png)
+
+### Full Pipeline Running
+
+![Live pipeline overview](docs/screenshots/12_live_pipeline_overview.png)
+
+### Training Metrics
+
+![Full-data model training metrics](docs/screenshots/03_full_training_metrics.png)
+
+### MongoDB Validation
+
+![MongoDB latest predictions](docs/screenshots/06_mongodb_latest_predictions.png)
+
+---
+
+## 14. How to Run
+
+### 14.1 Activate Environment
+
+From WSL/Linux:
+
+```bash
+cd "/mnt/c/Users/Me/Desktop/END TO END DATA ENGINEERING PROJECTS/BIG DATA PROJECT"
+source ../env/big_data_env/bin/activate
+export PYTHONPATH=$PWD
 ```
 
 ---
 
-## 12. Screenshots
-
-### Project structure
-
-![Project structure](docs/screenshots/01_project_structure.png)
-
-### Docker services running
-
-![Docker services running](docs/screenshots/02_docker_services_running.png)
-
-### Full-data model training metrics
-
-![Full-data model training metrics](docs/screenshots/03_full_training_metrics.png)
-
-### Spark streaming predictions written to MongoDB
-
-![Spark streaming to MongoDB](docs/screenshots/04_spark_streaming_to_mongodb.png)
-
-### Producer streaming Amazon reviews to Kafka
-
-![Producer streaming reviews](docs/screenshots/05_producer_streaming_reviews.png)
-
-### MongoDB latest prediction documents
-
-![MongoDB latest predictions](docs/screenshots/06_mongodb_latest_predictions.png)
-
-### MongoDB sentiment distribution
-
-![MongoDB sentiment distribution](docs/screenshots/07_mongodb_sentiment_distribution.png)
-
-### MongoDB prediction count
-
-![MongoDB prediction count](docs/screenshots/08_mongodb_prediction_count.png)
-
----
-
-## 13. How to Run the Project
-
-### 13.1 Start Docker Services
-
-From the project root:
+### 14.2 Start Kafka, Zookeeper, and MongoDB
 
 ```bash
 cd kafka
@@ -671,7 +597,7 @@ mongodb
 
 ---
 
-### 13.2 Train the Final Spark Model
+### 14.3 Train the Spark ML Model
 
 From the project root:
 
@@ -679,28 +605,43 @@ From the project root:
 spark-submit src/spark/training/train_spark_pipeline.py
 ```
 
-For cleaner metric output:
+Cleaner metrics output:
 
 ```bash
-spark-submit src/spark/training/train_spark_pipeline.py 2>/dev/null | grep -A 20 -E "==========|Accuracy|Correct predictions|Total predictions|positive|negative|neutral|label_index|class_index"
+spark-submit src/spark/training/train_spark_pipeline.py 2>/dev/null | grep -A 20 -E "==========|Accuracy|Macro F1|Positive F1|Negative F1|Neutral F1|Model saved"
+```
+
+The trained model is saved to:
+
+```text
+src/spark/model/sentiment_pipeline_model
 ```
 
 ---
 
-### 13.3 Run the Full Streaming Pipeline
+### 14.4 Export Test Split for Streaming
 
-Use three terminals.
+The producer streams from:
 
-#### Terminal 1 — Docker Services
-
-```bash
-cd kafka
-docker compose up
+```text
+data/processed/test_reviews.jsonl
 ```
 
-#### Terminal 2 — Spark Streaming Prediction
+Generate this file before running the producer:
 
 ```bash
+spark-submit src/ingestion/export_test_split_for_streaming.py
+```
+
+---
+
+### 14.5 Start Spark Streaming Prediction
+
+Terminal 1:
+
+```bash
+cd "/mnt/c/Users/Me/Desktop/END TO END DATA ENGINEERING PROJECTS/BIG DATA PROJECT"
+source ../env/big_data_env/bin/activate
 export PYTHONPATH=$PWD
 
 spark-submit \
@@ -708,23 +649,64 @@ spark-submit \
   src/spark/streaming/predict_stream.py
 ```
 
-#### Terminal 3 — Kafka Producer
-
-```bash
-python src/ingestion/producer.py
-```
-
-Expected Spark output:
+Expected output:
 
 ```text
-Batch 1: inserted 1 documents into MongoDB.
-Batch 2: inserted 1 documents into MongoDB.
-Batch 3: inserted 1 documents into MongoDB.
+========== LOADING SAVED PIPELINE MODEL ==========
+========== LABEL INDEX MAPPING ==========
+0.0 -> positive
+1.0 -> negative
+2.0 -> neutral
+========== READING FROM KAFKA ==========
+========== STREAMING PREDICTIONS TO MONGODB STARTED ==========
+Batch 1: inserted documents into MongoDB.
 ```
 
 ---
 
-### 13.4 Validate MongoDB Results
+### 14.6 Start Kafka Producer
+
+Terminal 2:
+
+```bash
+cd "/mnt/c/Users/Me/Desktop/END TO END DATA ENGINEERING PROJECTS/BIG DATA PROJECT"
+source ../env/big_data_env/bin/activate
+export PYTHONPATH=$PWD
+
+python src/ingestion/producer.py
+```
+
+Expected output:
+
+```text
+========== PRODUCER STARTED ==========
+Sent test row 1/56813 | score=5 | text=...
+Sent test row 2/56813 | score=1 | text=...
+```
+
+---
+
+### 14.7 Start Streamlit Dashboard
+
+Terminal 3:
+
+```bash
+cd "/mnt/c/Users/Me/Desktop/END TO END DATA ENGINEERING PROJECTS/BIG DATA PROJECT"
+source ../env/big_data_env/bin/activate
+export PYTHONPATH=$PWD
+
+python -m streamlit run src/dashboard/app.py
+```
+
+Open:
+
+```text
+http://localhost:8501
+```
+
+---
+
+## 15. MongoDB Validation Commands
 
 Open MongoDB shell:
 
@@ -777,84 +759,82 @@ db.sentiment_predictions.aggregate([
 
 ---
 
-## 14. Git and Artifact Rules
+## 16. Git and Artifact Rules
 
-The following files and folders should not be committed:
+Do not commit local data, generated models, environments, or database backups.
 
-```text
+Recommended `.gitignore` entries:
+
+```gitignore
+# Data
 data/raw/
+data/processed/
+*.csv
+*.jsonl
+
+# Spark generated artifacts
 src/spark/model/
 src/spark/models/
+spark-warehouse/
+metastore_db/
+
+# MongoDB exports/backups
+exports/
+backups/
+
+# Python
 .venv/
+venv/
+env/
+big_data_env/
 __pycache__/
-exports/mongodb/
-backups/mongodb/
+*.pyc
+
+# OS / IDE
+.DS_Store
+.vscode/
+.idea/
 ```
-
-Reason:
-
-- `data/raw/Reviews.csv` is too large for GitHub.
-- Spark saved models are generated artifacts.
-- MongoDB exports/backups can become large.
-- Python environments and cache files are local runtime files.
 
 The repository should contain:
 
 ```text
-Code
-Configuration
-Documentation
-Small results/reports
-Screenshots
+source code
+configuration files
+README and documentation
+small tuning result files
+selected screenshots
+```
+
+The repository should not contain:
+
+```text
+raw dataset
+processed streaming data
+saved Spark model
+virtual environment
+MongoDB data volume
+large exports or backups
 ```
 
 ---
 
-## 15. Next Phase: Dashboard
+## 17. Future Improvements
 
-Next phase:
+Planned production improvements:
 
-```text
-Phase 10 — Dashboard
-```
-
-Recommended first dashboard:
-
-```text
-MongoDB → Streamlit Dashboard
-```
-
-The dashboard should read from:
-
-```text
-mongodb://localhost:27017
-amazon_reviews_db.sentiment_predictions
-```
-
-First dashboard version should show:
-
-- Total number of predictions.
-- Positive / negative / neutral counts.
-- Sentiment distribution chart.
-- Latest prediction documents.
-- Review text previews.
-- Prediction confidence values.
-- Basic refresh behavior.
-
-The dashboard should not read MongoDB physical database files. It should connect to MongoDB as a database service.
+- Dockerize the Streamlit dashboard.
+- Add Airflow orchestration for batch training and export steps.
+- Add model versioning.
+- Add structured logging instead of terminal-only logs.
+- Add tests for MongoDB writer and dashboard data transformations.
+- Add Kafka consumer lag monitoring.
+- Add Docker health checks.
+- Add CI checks for formatting and imports.
+- Add dashboard deployment instructions.
 
 ---
 
-## 16. Future Work
+## Portfolio Summary
 
-Planned next improvements:
-
-- Build Streamlit dashboard from MongoDB.
-- Add filtering by predicted label.
-- Add latest reviews table.
-- Add confidence visualization.
-- Add optional export from MongoDB to JSON.
-- Add Airflow orchestration later.
-- Add Dockerized dashboard service.
-- Add monitoring and better logging.
-- Improve model tracking and reproducibility.
+This project demonstrates an end-to-end Big Data pipeline using Kafka, Spark Structured Streaming, Spark MLlib, MongoDB, and Streamlit. It includes both machine learning model development and real-time operational monitoring, making it suitable as a portfolio project for data engineering and big data engineering roles.

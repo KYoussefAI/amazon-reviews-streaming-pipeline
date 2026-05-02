@@ -6,4 +6,6 @@ scikit-learn
 nltk
 pymongo
 streamlit
+streamlit-autorefresh
 plotly
+reportlab
