@@ -3,16 +3,23 @@ import sys
 
 from pyspark.sql import SparkSession
 from pyspark.sql import functions as F
-from pyspark.sql.types import StructType, StructField, StringType, IntegerType
+from pyspark.sql.types import (
+    StructType,
+    StructField,
+    StringType,
+    IntegerType,
+)
 
 from pyspark.ml import PipelineModel
 
-from src.storage.mongodb_writer import write_predictions_to_mongodb
 
 PROJECT_ROOT = os.getcwd()
 
 if PROJECT_ROOT not in sys.path:
     sys.path.insert(0, PROJECT_ROOT)
+
+
+from src.storage.mongodb_writer import write_predictions_to_mongodb
 
 
 KAFKA_BOOTSTRAP_SERVERS = "localhost:9092"
@@ -42,7 +49,9 @@ def load_model():
 def get_index_to_label_mapping(model):
     """
     Finds the StringIndexerModel inside the saved PipelineModel.
-    It contains the label order learned during training.
+
+    The StringIndexerModel contains the label order learned during training.
+
     Example:
     0.0 -> positive
     1.0 -> negative
@@ -65,9 +74,128 @@ def build_prediction_label_column(labels):
         if prediction_label_expr is None:
             prediction_label_expr = F.when(condition, F.lit(label))
         else:
-            prediction_label_expr = prediction_label_expr.when(condition, F.lit(label))
+            prediction_label_expr = prediction_label_expr.when(
+                condition,
+                F.lit(label)
+            )
 
     return prediction_label_expr.otherwise(F.lit("unknown"))
+
+
+def build_message_schema():
+    """
+    Kafka message schema.
+
+    These fields come from:
+    data/processed/test_reviews.jsonl
+    -> producer.py
+    -> Kafka topic amazon_reviews
+    -> Spark Structured Streaming
+    """
+
+    return StructType([
+        StructField("product_id", StringType(), True),
+        StructField("user_id", StringType(), True),
+        StructField("review_time", StringType(), True),
+        StructField("review_date", StringType(), True),
+        StructField("score", IntegerType(), True),
+        StructField("summary", StringType(), True),
+        StructField("text", StringType(), True),
+        StructField("label", StringType(), True),
+        StructField("source_split", StringType(), True),
+        StructField("source_row_index", IntegerType(), True),
+    ])
+
+
+def parse_kafka_messages(kafka_df, message_schema):
+    parsed_df = kafka_df.select(
+        F.from_json(
+            F.col("value").cast("string"),
+            message_schema
+        ).alias("data")
+    ).select(
+        F.col("data.product_id").alias("product_id"),
+        F.col("data.user_id").alias("user_id"),
+        F.col("data.review_time").alias("review_time"),
+        F.col("data.review_date").alias("review_date"),
+        F.col("data.score").alias("score"),
+        F.col("data.summary").alias("summary"),
+        F.col("data.text").alias("text"),
+        F.col("data.label").alias("label"),
+        F.col("data.source_split").alias("source_split"),
+        F.col("data.source_row_index").alias("source_row_index"),
+    )
+
+    parsed_df = parsed_df.dropna(
+        subset=[
+            "product_id",
+            "user_id",
+            "review_time",
+            "review_date",
+            "score",
+            "text",
+            "label",
+            "source_split",
+        ]
+    )
+
+    return parsed_df
+
+
+def build_prediction_input(parsed_df, labels):
+    """
+    The saved Spark PipelineModel expects:
+    - text
+    - label
+    - class_weight
+
+    In streaming, we now receive the true label from the exported test data.
+    This label is useful for later validation/debugging, but the prediction itself
+    is based on the review text.
+
+    class_weight is added only to satisfy the trained pipeline schema.
+    During inference, it does not change the prediction.
+    """
+
+    prediction_input_df = parsed_df.withColumn(
+        "label",
+        F.when(
+            F.col("label").isin(labels),
+            F.col("label")
+        ).otherwise(F.lit(labels[0]))
+    ).withColumn(
+        "class_weight",
+        F.lit(1.0)
+    )
+
+    return prediction_input_df
+
+
+def build_output_dataframe(predictions, labels):
+    output_df = predictions.withColumn(
+        "predicted_label",
+        build_prediction_label_column(labels)
+    ).withColumn(
+        "true_label",
+        F.col("label")
+    ).select(
+        "product_id",
+        "user_id",
+        "review_time",
+        "review_date",
+        "score",
+        "summary",
+        F.substring("text", 1, 120).alias("text_preview"),
+        "text",
+        "true_label",
+        "source_split",
+        "source_row_index",
+        "prediction",
+        "predicted_label",
+        "probability"
+    )
+
+    return output_df
 
 
 def main():
@@ -80,10 +208,7 @@ def main():
     for index, label in enumerate(labels):
         print(f"{float(index)} -> {label}")
 
-    message_schema = StructType([
-        StructField("text", StringType(), True),
-        StructField("score", IntegerType(), True),
-    ])
+    message_schema = build_message_schema()
 
     print("========== READING FROM KAFKA ==========")
 
@@ -94,40 +219,21 @@ def main():
         .option("startingOffsets", "latest") \
         .load()
 
-    parsed_df = kafka_df.select(
-        F.from_json(
-            F.col("value").cast("string"),
-            message_schema
-        ).alias("data")
-    ).select(
-        F.col("data.text").alias("text"),
-        F.col("data.score").alias("score")
-    ).dropna(subset=["text"])
+    parsed_df = parse_kafka_messages(
+        kafka_df=kafka_df,
+        message_schema=message_schema
+    )
 
-    # The saved PipelineModel contains a fitted StringIndexerModel.
-    # During streaming prediction we do not know the true label.
-    # This dummy label only satisfies the pipeline schema.
-    # It does not affect the prediction.
-    prediction_input_df = parsed_df.withColumn(
-        "label",
-        F.lit(labels[0])
-    ).withColumn(
-        "class_weight",
-        F.lit(1.0)
+    prediction_input_df = build_prediction_input(
+        parsed_df=parsed_df,
+        labels=labels
     )
 
     predictions = model.transform(prediction_input_df)
 
-    output_df = predictions.withColumn(
-        "predicted_label",
-        build_prediction_label_column(labels)
-    ).select(
-        F.substring("text", 1, 120).alias("text_preview"),
-        "text",
-        "score",
-        "prediction",
-        "predicted_label",
-        "probability"
+    output_df = build_output_dataframe(
+        predictions=predictions,
+        labels=labels
     )
 
     print("========== STREAMING PREDICTIONS TO MONGODB STARTED ==========")
@@ -135,6 +241,7 @@ def main():
     query = output_df.writeStream \
         .foreachBatch(write_predictions_to_mongodb) \
         .outputMode("append") \
+        .option("checkpointLocation", "data/processed/checkpoints/spark_streaming_predictions") \
         .start()
 
     query.awaitTermination()
