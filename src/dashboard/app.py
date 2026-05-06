@@ -1016,66 +1016,94 @@ def render_header():
     )
 
 
+
 def render_sidebar():
     st.sidebar.header("Dashboard Controls")
 
-    sentiment_filter = st.sidebar.selectbox(
-        "Predicted sentiment",
-        ["All", "positive", "negative", "neutral"]
-    )
+    with st.sidebar.expander("Prediction filters", expanded=True):
+        sentiment_filter = st.selectbox(
+            "Predicted sentiment",
+            ["All", "positive", "negative", "neutral"],
+            key="filter_predicted_sentiment"
+        )
 
-    score_filter = st.sidebar.selectbox(
-        "Amazon score",
-        ["All", "1", "2", "3", "4", "5"]
-    )
+        score_filter = st.selectbox(
+            "Amazon score",
+            ["All", "1", "2", "3", "4", "5"],
+            key="filter_amazon_score"
+        )
 
-    batches = get_available_batches()
-    batch_options = ["All"] + [str(batch) for batch in batches]
+        batches = get_available_batches()
+        batch_options = ["All"] + [str(batch) for batch in batches]
 
-    batch_filter = st.sidebar.selectbox(
-        "Batch ID",
-        batch_options
-    )
+        batch_filter = st.selectbox(
+            "Batch ID",
+            batch_options,
+            key="filter_batch_id"
+        )
 
     product_ids = get_available_product_ids()
     product_options = ["All"] + product_ids
 
-    default_product_index = 0
-    if REQUIRED_DASHBOARD_PRODUCT_ID in product_options:
-        default_product_index = product_options.index(REQUIRED_DASHBOARD_PRODUCT_ID)
+    with st.sidebar.expander("Product filter", expanded=True):
+        st.caption(
+            "Choose a ProductId from MongoDB or type one manually. "
+            "Manual input has priority over the dropdown."
+        )
 
-    product_filter = st.sidebar.selectbox(
-        "ProductId",
-        product_options,
-        index=0
-    )
+        typed_product_id = st.text_input(
+            "Type ProductId",
+            value="",
+            placeholder=f"Example: {REQUIRED_DASHBOARD_PRODUCT_ID}",
+            key="filter_product_text"
+        ).strip()
 
-    st.sidebar.caption(
-        f"Required dashboard ProductId available: {REQUIRED_DASHBOARD_PRODUCT_ID}"
-        if REQUIRED_DASHBOARD_PRODUCT_ID in product_options
-        else f"Required dashboard ProductId not found yet: {REQUIRED_DASHBOARD_PRODUCT_ID}"
-    )
+        selected_product_id = st.selectbox(
+            "Or choose ProductId",
+            product_options,
+            index=0,
+            key="filter_product_select"
+        )
 
-    limit = st.sidebar.slider(
-        "Latest records to display",
-        min_value=50,
-        max_value=5000,
-        value=DEFAULT_LIMIT,
-        step=50
-    )
+        if typed_product_id:
+            product_filter = typed_product_id
+            st.caption(f"Active ProductId filter: `{product_filter}`")
+        else:
+            product_filter = selected_product_id
 
-    auto_refresh = st.sidebar.checkbox(
-        "Auto-refresh dashboard",
-        value=True
-    )
+        if REQUIRED_DASHBOARD_PRODUCT_ID in product_options:
+            st.success(
+                f"Required dashboard ProductId available: {REQUIRED_DASHBOARD_PRODUCT_ID}"
+            )
+        else:
+            st.warning(
+                f"Required dashboard ProductId not found yet: {REQUIRED_DASHBOARD_PRODUCT_ID}"
+            )
 
-    refresh_interval = st.sidebar.slider(
-        "Refresh interval in seconds",
-        min_value=2,
-        max_value=30,
-        value=5,
-        step=1
-    )
+    with st.sidebar.expander("Display settings", expanded=True):
+        limit = st.slider(
+            "Latest records to display",
+            min_value=50,
+            max_value=5000,
+            value=DEFAULT_LIMIT,
+            step=50,
+            key="filter_limit"
+        )
+
+        auto_refresh = st.checkbox(
+            "Auto-refresh dashboard",
+            value=True,
+            key="filter_auto_refresh"
+        )
+
+        refresh_interval = st.slider(
+            "Refresh interval in seconds",
+            min_value=2,
+            max_value=30,
+            value=5,
+            step=1,
+            key="filter_refresh_interval"
+        )
 
     st.sidebar.markdown("---")
     st.sidebar.write("MongoDB source filter")
@@ -1102,6 +1130,11 @@ def render_status_row(is_connected, connection_message, analytics_df, batch_kpis
     latest_batch_id = batch_kpis["latest_batch_id"]
 
     status_value = connection_message if is_connected else "Disconnected"
+    confidence_label = (
+        "Prediction Confidence"
+        if total_predictions == 1
+        else "Average Confidence"
+    )
 
     col1, col2, col3, col4 = st.columns(4)
 
@@ -1131,15 +1164,14 @@ def render_status_row(is_connected, connection_message, analytics_df, batch_kpis
     with col4:
         if average_confidence is not None:
             st.metric(
-                "Average Confidence",
+                confidence_label,
                 f"{average_confidence * 100:.2f}%"
             )
         else:
             st.metric(
-                "Average Confidence",
+                confidence_label,
                 "N/A"
             )
-
 
 def render_prediction_kpis(analytics_df):
     sentiment_summary = calculate_sentiment_summary(analytics_df)
@@ -1173,7 +1205,8 @@ def render_prediction_kpis(analytics_df):
     col4.metric("Low Confidence", f"{low_confidence_count:,}")
 
 
-def render_sentiment_pie(analytics_df):
+
+def render_sentiment_pie(analytics_df, chart_key="global"):
     sentiment_summary = calculate_sentiment_summary(analytics_df)
 
     if sentiment_summary.empty:
@@ -1200,11 +1233,12 @@ def render_sentiment_pie(analytics_df):
 
     st.plotly_chart(
         fig,
-        use_container_width=True
+        width="stretch",
+        key=f"sentiment_pie_{chart_key}"
     )
 
 
-def render_confidence_distribution(analytics_df):
+def render_confidence_distribution(analytics_df, chart_key="global"):
     confidence_distribution = calculate_confidence_distribution(analytics_df)
 
     if confidence_distribution.empty:
@@ -1231,11 +1265,12 @@ def render_confidence_distribution(analytics_df):
 
     st.plotly_chart(
         fig,
-        use_container_width=True
+        width="stretch",
+        key=f"confidence_distribution_{chart_key}"
     )
 
 
-def render_batch_line_chart(batch_summary):
+def render_batch_line_chart(batch_summary, chart_key="global"):
     if batch_summary.empty:
         st.warning("No batch data available.")
         return
@@ -1260,9 +1295,9 @@ def render_batch_line_chart(batch_summary):
 
     st.plotly_chart(
         fig,
-        use_container_width=True
+        width="stretch",
+        key=f"batch_line_chart_{chart_key}"
     )
-
 
 def render_batch_kpi_panel(batch_kpis):
     st.write("Batch Summary")
@@ -1278,12 +1313,13 @@ def render_batch_kpi_panel(batch_kpis):
 
     st.dataframe(
         batch_kpi_df,
-        use_container_width=True,
+        width="stretch",
         hide_index=True
     )
 
 
-def render_score_distribution(analytics_df):
+
+def render_score_distribution(analytics_df, chart_key="global"):
     score_distribution = calculate_score_distribution(analytics_df)
 
     if score_distribution.empty:
@@ -1310,11 +1346,12 @@ def render_score_distribution(analytics_df):
 
     st.plotly_chart(
         fig,
-        use_container_width=True
+        width="stretch",
+        key=f"score_distribution_{chart_key}"
     )
 
 
-def render_score_sentiment_grouped_bar(analytics_df):
+def render_score_sentiment_grouped_bar(analytics_df, chart_key="global"):
     if (
         analytics_df.empty
         or "score" not in analytics_df.columns
@@ -1345,19 +1382,20 @@ def render_score_sentiment_grouped_bar(analytics_df):
 
     st.plotly_chart(
         fig,
-        use_container_width=True
+        width="stretch",
+        key=f"score_sentiment_bar_{chart_key}"
     )
 
 
-def render_predictions_by_date(analytics_df):
-    date_summary = calculate_predictions_by_date(analytics_df)
+def render_predictions_by_date(analytics_df, chart_key="global"):
+    predictions_by_date = calculate_predictions_by_date(analytics_df)
 
-    if date_summary.empty:
+    if predictions_by_date.empty:
         st.warning("No review date data available.")
         return
 
     fig = px.bar(
-        date_summary,
+        predictions_by_date,
         x="review_date",
         y="count",
         color="predicted_label",
@@ -1373,11 +1411,12 @@ def render_predictions_by_date(analytics_df):
 
     st.plotly_chart(
         fig,
-        use_container_width=True
+        width="stretch",
+        key=f"predictions_by_date_{chart_key}"
     )
 
 
-def render_source_split_summary(analytics_df):
+def render_source_split_summary(analytics_df, chart_key="global"):
     source_split_summary = calculate_source_split_summary(analytics_df)
 
     if source_split_summary.empty:
@@ -1403,7 +1442,8 @@ def render_source_split_summary(analytics_df):
 
     st.plotly_chart(
         fig,
-        use_container_width=True
+        width="stretch",
+        key=f"source_split_summary_{chart_key}"
     )
 
 
@@ -1427,51 +1467,102 @@ def render_required_product_analysis(analytics_df):
         )
         return
 
-    average_confidence = None
-    if "confidence" in product_df.columns:
-        average_confidence = product_df["confidence"].mean()
+    product_df = product_df.sort_values("processed_at", ascending=False)
+    latest_row = product_df.iloc[0]
+    total_product_predictions = len(product_df)
 
-    col1, col2, col3, col4 = st.columns(4)
+    def value_or_na(column_name):
+        if column_name not in product_df.columns:
+            return "N/A"
+        value = latest_row.get(column_name)
+        if pd.isna(value):
+            return "N/A"
+        return value
 
-    col1.metric("Product Predictions", f"{len(product_df):,}")
-
-    if "score" in product_df.columns and not product_df["score"].dropna().empty:
-        col2.metric(
-            "Average Score",
-            f"{product_df['score'].mean():.2f}"
+    if total_product_predictions == 1:
+        st.caption(
+            "This ProductId currently has one streamed prediction. "
+            "The cards below describe that exact event, not aggregated averages."
         )
-    else:
-        col2.metric("Average Score", "N/A")
 
-    if average_confidence is not None:
-        col3.metric(
-            "Average Confidence",
-            f"{average_confidence * 100:.2f}%"
+        confidence_value = value_or_na("confidence")
+        confidence_display = (
+            f"{float(confidence_value) * 100:.2f}%"
+            if confidence_value != "N/A"
+            else "N/A"
         )
-    else:
-        col3.metric("Average Confidence", "N/A")
 
-    if "source_split" in product_df.columns:
-        source_values = ", ".join(
-            sorted(product_df["source_split"].dropna().astype(str).unique())
+        col1, col2, col3, col4, col5 = st.columns(5)
+        col1.metric("Product Predictions", "1")
+        col2.metric("Review Score", value_or_na("score"))
+        col3.metric("True Label", value_or_na("true_label"))
+        col4.metric("Predicted Label", value_or_na("predicted_label"))
+        col5.metric("Prediction Confidence", confidence_display)
+
+        col6, col7, col8 = st.columns(3)
+        col6.metric("Review Date", value_or_na("review_date"))
+        col7.metric("Source Split", value_or_na("source_split"))
+        col8.metric("Batch ID", value_or_na("batch_id"))
+    else:
+        average_confidence = None
+        if "confidence" in product_df.columns:
+            average_confidence = product_df["confidence"].mean()
+
+        majority_prediction = "N/A"
+        if "predicted_label" in product_df.columns:
+            label_counts = product_df["predicted_label"].dropna().value_counts()
+            if not label_counts.empty:
+                majority_prediction = label_counts.index[0]
+
+        date_range = "N/A"
+        if "review_date" in product_df.columns:
+            valid_dates = product_df["review_date"].dropna().astype(str)
+            if not valid_dates.empty:
+                date_range = f"{valid_dates.min()} → {valid_dates.max()}"
+
+        source_values = "N/A"
+        if "source_split" in product_df.columns:
+            values = sorted(product_df["source_split"].dropna().astype(str).unique())
+            if values:
+                source_values = ", ".join(values)
+
+        col1, col2, col3, col4, col5 = st.columns(5)
+        col1.metric("Product Predictions", f"{total_product_predictions:,}")
+
+        if "score" in product_df.columns and not product_df["score"].dropna().empty:
+            col2.metric("Average Review Score", f"{product_df['score'].mean():.2f}")
+        else:
+            col2.metric("Average Review Score", "N/A")
+
+        col3.metric("Main Predicted Label", majority_prediction)
+
+        if average_confidence is not None:
+            col4.metric("Average Confidence", f"{average_confidence * 100:.2f}%")
+        else:
+            col4.metric("Average Confidence", "N/A")
+
+        col5.metric("Source Split", source_values)
+        st.caption(f"Review date range: {date_range}")
+
+    col_chart1, col_chart2 = st.columns(2)
+
+    with col_chart1:
+        render_sentiment_pie(
+            product_df,
+            chart_key="required_product"
         )
-        col4.metric("Source Split", source_values or "N/A")
-    else:
-        col4.metric("Source Split", "N/A")
 
-    col5, col6 = st.columns(2)
-
-    with col5:
-        render_sentiment_pie(product_df)
-
-    with col6:
-        render_score_distribution(product_df)
+    with col_chart2:
+        render_score_distribution(
+            product_df,
+            chart_key="required_product"
+        )
 
     st.write(f"Latest predictions for ProductId {REQUIRED_DASHBOARD_PRODUCT_ID}")
-    render_latest_predictions(product_df.sort_values("processed_at", ascending=False))
+    render_latest_predictions(product_df)
 
 
-def render_confidence_by_sentiment(analytics_df):
+def render_confidence_by_sentiment(analytics_df, chart_key="global"):
     confidence_by_sentiment = calculate_confidence_by_sentiment(analytics_df)
 
     if confidence_by_sentiment.empty:
@@ -1500,9 +1591,9 @@ def render_confidence_by_sentiment(analytics_df):
 
     st.plotly_chart(
         fig,
-        use_container_width=True
+        width="stretch",
+        key=f"confidence_by_sentiment_{chart_key}"
     )
-
 
 def render_low_confidence_table(analytics_df):
     if analytics_df.empty or "confidence" not in analytics_df.columns:
@@ -1543,7 +1634,7 @@ def render_low_confidence_table(analytics_df):
 
     st.dataframe(
         table_df,
-        use_container_width=True,
+        width="stretch",
         hide_index=True
     )
 
@@ -1580,7 +1671,7 @@ def render_suspicious_predictions_table(predictions_df):
 
     st.dataframe(
         table_df,
-        use_container_width=True,
+        width="stretch",
         hide_index=True
     )
 
@@ -1618,7 +1709,7 @@ def render_latest_predictions(predictions_df):
 
     st.dataframe(
         table_df,
-        use_container_width=True,
+        width="stretch",
         hide_index=True
     )
 
@@ -1636,7 +1727,7 @@ def render_report_download(analytics_df, predictions_df, active_filters):
 
     prepare_report = st.button(
         "Prepare PDF report",
-        use_container_width=True
+        width="stretch"
     )
 
     if prepare_report:
@@ -1660,7 +1751,7 @@ def render_report_download(analytics_df, predictions_df, active_filters):
             data=st.session_state["pdf_report_buffer"],
             file_name=st.session_state["pdf_report_filename"],
             mime="application/pdf",
-            use_container_width=True
+            width="stretch"
         )
 
 
@@ -1742,10 +1833,10 @@ def main():
     col1, col2 = st.columns(2)
 
     with col1:
-        render_sentiment_pie(analytics_df)
+        render_sentiment_pie(analytics_df, chart_key="global")
 
     with col2:
-        render_confidence_distribution(analytics_df)
+        render_confidence_distribution(analytics_df, chart_key="global")
 
     st.markdown(
         '<div class="section-title">Streaming Operations</div>',
@@ -1754,7 +1845,7 @@ def main():
     col3, col4 = st.columns([2, 1])
 
     with col3:
-        render_batch_line_chart(batch_summary)
+        render_batch_line_chart(batch_summary, chart_key="global")
 
     with col4:
         render_batch_kpi_panel(batch_kpis)
@@ -1766,10 +1857,10 @@ def main():
     col5, col6 = st.columns(2)
 
     with col5:
-        render_score_distribution(analytics_df)
+        render_score_distribution(analytics_df, chart_key="global")
 
     with col6:
-        render_score_sentiment_grouped_bar(analytics_df)
+        render_score_sentiment_grouped_bar(analytics_df, chart_key="global")
 
     st.markdown(
         '<div class="section-title">Date and Source Analytics</div>',
@@ -1778,10 +1869,10 @@ def main():
     col_date, col_source = st.columns([2, 1])
 
     with col_date:
-        render_predictions_by_date(analytics_df)
+        render_predictions_by_date(analytics_df, chart_key="global")
 
     with col_source:
-        render_source_split_summary(analytics_df)
+        render_source_split_summary(analytics_df, chart_key="global")
 
     st.markdown(
         '<div class="section-title">Required ProductId Analysis</div>',
@@ -1793,7 +1884,7 @@ def main():
         '<div class="section-title">Model Confidence by Class</div>',
         unsafe_allow_html=True
     )
-    render_confidence_by_sentiment(analytics_df)
+    render_confidence_by_sentiment(analytics_df, chart_key="global")
 
     st.markdown(
         '<div class="section-title">Model Risk Monitoring</div>',
