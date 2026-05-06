@@ -22,15 +22,28 @@ RAW_DATA_PATH = "data/raw/Reviews.csv"
 OUTPUT_DIR = "data/processed/test_reviews_stream_json"
 FINAL_JSONL_PATH = "data/processed/test_reviews.jsonl"
 
+REQUIRED_DASHBOARD_PRODUCT_ID = "B001E4KFG0"
+
 
 def load_clean_raw_data(spark):
     """
     Load Amazon Reviews safely and keep only rows valid for the sentiment pipeline.
 
-    Important:
-    - Score must be exactly 1, 2, 3, 4, or 5.
-    - Text must not be null.
-    - We clean before splitting so train/val/test are based on valid records only.
+    This export is used for the online prediction simulation:
+    Reviews.csv
+    -> fixed train/validation/test split
+    -> export only the test split
+    -> Kafka producer streams the exported test rows.
+
+    Important fields preserved:
+    - ProductId: needed for product-level dashboard analysis
+    - UserId: useful review metadata
+    - Time: original Unix timestamp from Amazon Reviews
+    - review_time: timestamp converted from Unix time
+    - review_date: date used for prediction-by-date dashboard charts
+    - Summary: short review summary
+    - Text: full review text used by the Spark ML model
+    - Score: original score used to create the true label
     """
 
     df = spark.read.csv(
@@ -44,17 +57,57 @@ def load_clean_raw_data(spark):
     )
 
     df = df.select(
-        F.col("Text").alias("text"),
-        F.trim(F.col("Score")).alias("Score")
-    ).dropna(subset=["text", "Score"])
+        F.trim(F.col("ProductId")).alias("product_id"),
+        F.trim(F.col("UserId")).alias("user_id"),
+        F.trim(F.col("Time")).alias("raw_time"),
+        F.trim(F.col("Score")).alias("Score"),
+        F.col("Summary").alias("summary"),
+        F.col("Text").alias("text")
+    )
 
+    df = df.dropna(
+        subset=[
+            "product_id",
+            "user_id",
+            "raw_time",
+            "Score",
+            "text"
+        ]
+    )
+
+    # Keep only clean numeric scores from 1 to 5.
     df = df.filter(
         F.col("Score").rlike("^[1-5]$")
+    )
+
+    # Keep only valid Unix timestamps.
+    df = df.filter(
+        F.col("raw_time").rlike("^[0-9]+$")
     )
 
     df = df.withColumn(
         "Score",
         F.col("Score").cast("int")
+    )
+
+    df = df.withColumn(
+        "review_timestamp",
+        F.from_unixtime(
+            F.col("raw_time").cast("long")
+        ).cast("timestamp")
+    )
+
+    df = df.withColumn(
+        "review_date",
+        F.to_date(F.col("review_timestamp"))
+    )
+
+    df = df.withColumn(
+        "review_time",
+        F.date_format(
+            F.col("review_timestamp"),
+            "yyyy-MM-dd HH:mm:ss"
+        )
     )
 
     df = df.withColumn(
@@ -64,7 +117,22 @@ def load_clean_raw_data(spark):
          .otherwise("positive")
     )
 
-    return df.select("text", "Score", "label")
+    df = df.fillna(
+        {
+            "summary": ""
+        }
+    )
+
+    return df.select(
+        "product_id",
+        "user_id",
+        "review_time",
+        "review_date",
+        "Score",
+        "summary",
+        "text",
+        "label"
+    )
 
 
 def main():
@@ -83,6 +151,12 @@ def main():
     print("Label distribution:")
     df.groupBy("label").count().show()
 
+    print("ProductId check:")
+    df.select("product_id").show(5, truncate=False)
+
+    print("Review date check:")
+    df.select("review_time", "review_date").show(5, truncate=False)
+
     train_df, val_df, test_df = split_dataset(df)
 
     print("========== TEST SPLIT CHECK ==========")
@@ -93,6 +167,18 @@ def main():
 
     print("Test label distribution:")
     test_df.groupBy("label").count().show()
+
+    print("Test ProductId check:")
+    test_df.select("product_id").show(5, truncate=False)
+
+    print("Test review date check:")
+    test_df.select("review_time", "review_date").show(5, truncate=False)
+
+    print(f"Dashboard ProductId requirement check: {REQUIRED_DASHBOARD_PRODUCT_ID}")
+    specific_product_count = test_df.filter(
+        F.col("product_id") == "B001E4KFG0"
+    ).count()
+    print(f"Rows in test split for ProductId B001E4KFG0: {specific_product_count}")
 
     os.makedirs("data/processed", exist_ok=True)
 
@@ -105,8 +191,13 @@ def main():
     print("========== WRITING TEST SPLIT TO JSONL ==========")
 
     test_df.select(
-        F.col("text").alias("text"),
+        F.col("product_id").alias("product_id"),
+        F.col("user_id").alias("user_id"),
+        F.col("review_time").alias("review_time"),
+        F.col("review_date").cast("string").alias("review_date"),
         F.col("Score").alias("score"),
+        F.col("summary").alias("summary"),
+        F.col("text").alias("text"),
         F.col("label").alias("label")
     ).coalesce(1).write.mode("overwrite").json(OUTPUT_DIR)
 
@@ -119,6 +210,19 @@ def main():
 
     print("========== EXPORT COMPLETE ==========")
     print(f"Final file: {FINAL_JSONL_PATH}")
+
+    print("========== EXPORTED JSONL SAMPLE ==========")
+    exported_df = spark.read.json(FINAL_JSONL_PATH)
+    exported_df.select(
+        "product_id",
+        "user_id",
+        "review_time",
+        "review_date",
+        "score",
+        "summary",
+        "text",
+        "label"
+    ).show(5, truncate=80)
 
     spark.stop()
 
