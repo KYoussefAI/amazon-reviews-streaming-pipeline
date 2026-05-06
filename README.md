@@ -1055,3 +1055,4 @@ Data Source
 ```
 
 The most important learning outcome is not only the Amazon Reviews use case, but the repeatable architecture pattern that can be reused across future Big Data projects.
+.
