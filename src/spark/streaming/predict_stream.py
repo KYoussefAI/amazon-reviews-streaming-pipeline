@@ -8,6 +8,8 @@ from pyspark.sql.types import (
     StructField,
     StringType,
     IntegerType,
+    DoubleType,
+    ArrayType,
 )
 
 from pyspark.ml import PipelineModel
@@ -25,12 +27,18 @@ from src.storage.mongodb_writer import write_predictions_to_mongodb
 KAFKA_BOOTSTRAP_SERVERS = "localhost:9092"
 KAFKA_TOPIC = "amazon_reviews"
 
-MODEL_PATH = "src/spark/model/sentiment_pipeline_model"
+# Best single saveable model from validation-based comparison.
+# The ensemble had the best overall Macro F1, but it is heavier for streaming.
+# Among single Spark PipelineModels, One-vs-Rest Linear SVC had the best validation Macro F1.
+BEST_SINGLE_MODEL_NAME = "one_vs_rest_linear_svc"
+BEST_SINGLE_MODEL_PATH = "src/spark/model/ensemble_models/one_vs_rest_linear_svc"
+
+CHECKPOINT_LOCATION = "data/processed/checkpoints/spark_streaming_best_single_model"
 
 
 def create_spark_session():
     spark = SparkSession.builder \
-        .appName("AmazonReviewsSparkStreamingPrediction") \
+        .appName("AmazonReviewsSparkStreamingBestSingleModelPrediction") \
         .config("spark.driver.memory", "4g") \
         .getOrCreate()
 
@@ -40,9 +48,11 @@ def create_spark_session():
 
 
 def load_model():
-    print("========== LOADING SAVED PIPELINE MODEL ==========")
-    model = PipelineModel.load(MODEL_PATH)
-    print(f"Model loaded from: {MODEL_PATH}")
+    print("========== LOADING BEST SINGLE SPARK MODEL ==========")
+    print(f"Model name: {BEST_SINGLE_MODEL_NAME}")
+    model = PipelineModel.load(BEST_SINGLE_MODEL_PATH)
+    print(f"Model loaded from: {BEST_SINGLE_MODEL_PATH}")
+
     return model
 
 
@@ -65,11 +75,11 @@ def get_index_to_label_mapping(model):
     raise ValueError("No StringIndexerModel with labels found in the saved pipeline.")
 
 
-def build_prediction_label_column(labels):
+def build_prediction_label_column(prediction_column, labels):
     prediction_label_expr = None
 
     for index, label in enumerate(labels):
-        condition = F.col("prediction") == float(index)
+        condition = F.col(prediction_column) == float(index)
 
         if prediction_label_expr is None:
             prediction_label_expr = F.when(condition, F.lit(label))
@@ -149,12 +159,9 @@ def build_prediction_input(parsed_df, labels):
     - label
     - class_weight
 
-    In streaming, we now receive the true label from the exported test data.
-    This label is useful for later validation/debugging, but the prediction itself
-    is based on the review text.
-
-    class_weight is added only to satisfy the trained pipeline schema.
-    During inference, it does not change the prediction.
+    The true label comes from exported test data and is useful for validation.
+    class_weight is included for compatibility with shared project schema.
+    During inference, it does not change predictions.
     """
 
     prediction_input_df = parsed_df.withColumn(
@@ -171,13 +178,37 @@ def build_prediction_input(parsed_df, labels):
     return prediction_input_df
 
 
+def build_probability_column(predictions):
+    """
+    Some Spark classifiers, such as Logistic Regression and Naive Bayes,
+    produce a probability column.
+
+    OneVsRest LinearSVC does not provide calibrated probabilities by default.
+    For dashboard compatibility, we store an empty probability list.
+    """
+
+    if "probability" in predictions.columns:
+        return F.col("probability")
+
+    return F.array().cast(ArrayType(DoubleType()))
+
+
 def build_output_dataframe(predictions, labels):
     output_df = predictions.withColumn(
         "predicted_label",
-        build_prediction_label_column(labels)
+        build_prediction_label_column(
+            prediction_column="prediction",
+            labels=labels
+        )
     ).withColumn(
         "true_label",
         F.col("label")
+    ).withColumn(
+        "probability",
+        build_probability_column(predictions)
+    ).withColumn(
+        "model_type",
+        F.lit(BEST_SINGLE_MODEL_NAME)
     ).select(
         "product_id",
         "user_id",
@@ -192,7 +223,8 @@ def build_output_dataframe(predictions, labels):
         "source_row_index",
         "prediction",
         "predicted_label",
-        "probability"
+        "probability",
+        "model_type",
     )
 
     return output_df
@@ -236,12 +268,15 @@ def main():
         labels=labels
     )
 
-    print("========== STREAMING PREDICTIONS TO MONGODB STARTED ==========")
+    print("========== STREAMING BEST SINGLE MODEL PREDICTIONS TO MONGODB STARTED ==========")
 
     query = output_df.writeStream \
         .foreachBatch(write_predictions_to_mongodb) \
         .outputMode("append") \
-        .option("checkpointLocation", "data/processed/checkpoints/spark_streaming_predictions") \
+        .option(
+            "checkpointLocation",
+            CHECKPOINT_LOCATION
+        ) \
         .start()
 
     query.awaitTermination()
