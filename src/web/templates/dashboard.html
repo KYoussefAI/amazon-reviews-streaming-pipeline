@@ -1,0 +1,421 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Amazon Reviews Sentiment Intelligence Platform</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <script>
+        window.APP_CONFIG = {
+            requiredProductId: "{{ required_product_id }}",
+            sourceName: "{{ source_name }}"
+        };
+    </script>
+
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+
+<body>
+    <div class="app-shell">
+        <aside class="sidebar">
+            <div class="brand">
+                <div class="brand-mark">AR</div>
+                <div>
+                    <h1>Sentiment Intelligence</h1>
+                    <p>Flask · Kafka · Spark · MongoDB</p>
+                </div>
+            </div>
+
+            <nav class="nav">
+                <a href="#overview">Overview</a>
+                <a href="#analytics">Analytics</a>
+                <a href="#quality">Quality</a>
+                <a href="#operations">Operations</a>
+                <a href="#product">ProductId</a>
+                <a href="#risk">Risk</a>
+                <a href="#events">Events</a>
+            </nav>
+
+            <section class="panel">
+                <h2>Filters</h2>
+
+                <label>Predicted sentiment</label>
+                <select id="sentimentFilter">
+                    <option value="All">All</option>
+                    <option value="positive">positive</option>
+                    <option value="negative">negative</option>
+                    <option value="neutral">neutral</option>
+                </select>
+
+                <label>Amazon score</label>
+                <select id="scoreFilter">
+                    <option value="All">All</option>
+                    <option value="1">1</option>
+                    <option value="2">2</option>
+                    <option value="3">3</option>
+                    <option value="4">4</option>
+                    <option value="5">5</option>
+                </select>
+
+                <label>Batch ID</label>
+                <select id="batchFilter">
+                    <option value="All">All</option>
+                </select>
+
+                <label>Model type</label>
+                <select id="modelTypeFilter">
+                    <option value="All">All</option>
+                </select>
+
+                <label>Source split</label>
+                <select id="sourceSplitFilter">
+                    <option value="All">All</option>
+                </select>
+            </section>
+
+            <section class="panel">
+                <h2>Date Window</h2>
+                <label>Review date from</label>
+                <input id="startDateFilter" type="date">
+
+                <label>Review date to</label>
+                <input id="endDateFilter" type="date">
+            </section>
+
+            <section class="panel">
+                <h2>Product Filter</h2>
+                <p class="hint">Type a ProductId manually or choose one from MongoDB. Manual input has priority.</p>
+
+                <label>Type ProductId</label>
+                <input id="productTextFilter" type="text" placeholder="Example: B001E4KFG0">
+
+                <label>Or choose ProductId</label>
+                <select id="productSelectFilter">
+                    <option value="All">All</option>
+                </select>
+
+                <div class="required-product">
+                    Required ProductId:
+                    <strong id="requiredProductIdLabel">B001E4KFG0</strong>
+                </div>
+            </section>
+
+            <section class="panel">
+                <h2>Refresh</h2>
+
+                <label>Latest records</label>
+                <input id="limitFilter" type="number" min="10" max="5000" step="10" value="100">
+
+                <label class="checkbox-row">
+                    <input id="autoRefresh" type="checkbox" checked>
+                    Auto-refresh
+                </label>
+
+                <label>Refresh seconds</label>
+                <input id="refreshSeconds" type="number" min="2" max="60" value="5">
+            </section>
+
+            <section class="panel source-panel">
+                <h2>Source</h2>
+                <code id="sourceNameLabel">spark_structured_streaming</code>
+            </section>
+        </aside>
+
+        <main class="content">
+            <header class="hero">
+                <div>
+                    <p class="eyebrow">Professional Flask / JavaScript Web Interface</p>
+                    <h1>Amazon Reviews Sentiment Intelligence Platform</h1>
+                    <p>
+                        Offline analytics web dashboard powered by MongoDB prediction results from
+                        Kafka and Spark Structured Streaming.
+                    </p>
+                </div>
+
+                <div class="hero-actions">
+                    <button id="refreshButton">Refresh</button>
+                    <a id="pdfReportLink" class="button secondary" href="/api/report.pdf" target="_blank">Download PDF</a>
+                </div>
+            </header>
+
+            <section class="architecture-strip">
+                <strong>Pipeline:</strong>
+                Producer → Kafka → Spark Structured Streaming → Best Spark ML Model → MongoDB → Flask / JavaScript Dashboard
+            </section>
+
+            <section id="overview" class="section">
+                <div class="section-title">
+                    <div>
+                        <h2>Pipeline Status</h2>
+                        <p>Runtime health, prediction volume, and model visibility.</p>
+                    </div>
+                </div>
+
+                <div class="metric-grid grid-4">
+                    <article class="metric-card">
+                        <span>MongoDB Status</span>
+                        <strong id="mongodbStatus">Checking...</strong>
+                    </article>
+
+                    <article class="metric-card">
+                        <span>Total Predictions</span>
+                        <strong id="totalPredictions">0</strong>
+                    </article>
+
+                    <article class="metric-card">
+                        <span>Latest Batch ID</span>
+                        <strong id="latestBatchId">N/A</strong>
+                    </article>
+
+                    <article class="metric-card">
+                        <span>Streamed Accuracy</span>
+                        <strong id="streamedAccuracy">N/A</strong>
+                    </article>
+                </div>
+
+                <div class="metric-grid grid-4">
+                    <article class="metric-card positive">
+                        <span>Positive Predictions</span>
+                        <strong id="positivePredictions">0</strong>
+                    </article>
+
+                    <article class="metric-card negative">
+                        <span>Negative Predictions</span>
+                        <strong id="negativePredictions">0</strong>
+                    </article>
+
+                    <article class="metric-card neutral">
+                        <span>Neutral Predictions</span>
+                        <strong id="neutralPredictions">0</strong>
+                    </article>
+
+                    <article class="metric-card">
+                        <span>Average Confidence</span>
+                        <strong id="averageConfidence">N/A</strong>
+                    </article>
+                </div>
+
+                <div class="metric-grid grid-4">
+                    <article class="metric-card">
+                        <span>Confidence Coverage</span>
+                        <strong id="confidenceCoverage">N/A</strong>
+                    </article>
+
+                    <article class="metric-card">
+                        <span>Low Confidence</span>
+                        <strong id="lowConfidenceCount">0</strong>
+                    </article>
+
+                    <article class="metric-card">
+                        <span>Labeled Samples</span>
+                        <strong id="labeledSamples">0</strong>
+                    </article>
+
+                    <article class="metric-card">
+                        <span>Latest Processed At</span>
+                        <strong id="latestProcessedAt" class="small-value">N/A</strong>
+                    </article>
+                </div>
+            </section>
+
+            <section id="analytics" class="section">
+                <div class="section-title">
+                    <div>
+                        <h2>Main Analytics</h2>
+                        <p>Sentiment distribution, model distribution, and score behavior.</p>
+                    </div>
+                </div>
+
+                <div class="grid-2">
+                    <article class="chart-card">
+                        <h3>Sentiment Distribution</h3>
+                        <div id="sentimentBars" class="bar-chart"></div>
+                    </article>
+
+                    <article class="chart-card">
+                        <h3>Model Type Distribution</h3>
+                        <div id="modelTypeBars" class="bar-chart"></div>
+                    </article>
+                </div>
+
+                <div class="grid-2 top-gap">
+                    <article class="chart-card">
+                        <h3>Amazon Score Distribution</h3>
+                        <div id="scoreBars" class="bar-chart"></div>
+                    </article>
+
+                    <article class="chart-card">
+                        <h3>Score by Predicted Sentiment</h3>
+                        <div id="scoreSentimentBars" class="stacked-chart"></div>
+                    </article>
+                </div>
+
+                <div class="grid-2 top-gap">
+                    <article class="chart-card wide-chart">
+                        <h3>Prediction Results by Review Date</h3>
+                        <div id="dateChart" class="date-chart"></div>
+                    </article>
+
+                    <article class="chart-card">
+                        <h3>Streaming Source Split Distribution</h3>
+                        <div id="sourceBars" class="bar-chart"></div>
+                    </article>
+                </div>
+            </section>
+
+            <section id="quality" class="section">
+                <div class="section-title">
+                    <div>
+                        <h2>Model Quality Analytics</h2>
+                        <p>Confidence, agreement, and confusion matrix using streamed labeled data.</p>
+                    </div>
+                </div>
+
+                <div class="grid-2">
+                    <article class="chart-card">
+                        <h3>Confidence Distribution</h3>
+                        <div id="confidenceBars" class="bar-chart"></div>
+                        <p class="chart-note">For LinearSVC, confidence can be N/A because the model does not output calibrated probabilities.</p>
+                    </article>
+
+                    <article class="chart-card">
+                        <h3>Average Confidence by Sentiment</h3>
+                        <div id="confidenceByLabelBars" class="bar-chart"></div>
+                    </article>
+                </div>
+
+                <div class="grid-2 top-gap">
+                    <article class="chart-card">
+                        <h3>True vs Predicted Confusion Matrix</h3>
+                        <div id="confusionMatrix" class="matrix"></div>
+                    </article>
+
+                    <article class="chart-card">
+                        <h3>Average Confidence by Model</h3>
+                        <div id="confidenceByModelBars" class="bar-chart"></div>
+                    </article>
+                </div>
+            </section>
+
+            <section id="operations" class="section">
+                <div class="section-title">
+                    <div>
+                        <h2>Streaming Operations</h2>
+                        <p>Micro-batch behavior and operational throughput.</p>
+                    </div>
+                </div>
+
+                <div class="grid-2">
+                    <article class="chart-card">
+                        <h3>Records per Micro-Batch</h3>
+                        <div id="batchChart" class="date-chart"></div>
+                    </article>
+
+                    <article class="chart-card">
+                        <h3>Batch Summary</h3>
+                        <div id="batchSummary" class="summary-table"></div>
+                    </article>
+                </div>
+            </section>
+
+            <section id="product" class="section">
+                <div class="section-title">
+                    <div>
+                        <h2>Required ProductId Analysis</h2>
+                        <p>Dedicated dashboard section for <code id="requiredProductCode">B001E4KFG0</code>.</p>
+                    </div>
+
+                    <button id="loadRequiredProductButton">Load Required Product</button>
+                </div>
+
+                <div id="productAnalysis" class="product-analysis"></div>
+            </section>
+
+            <section id="risk" class="section">
+                <div class="section-title">
+                    <div>
+                        <h2>Risk Monitoring</h2>
+                        <p>Low-confidence predictions and suspicious score/sentiment combinations.</p>
+                    </div>
+                </div>
+
+                <div class="grid-2">
+                    <article class="chart-card">
+                        <h3>Suspicious Prediction Samples</h3>
+                        <div class="table-wrapper compact">
+                            <table>
+                                <thead>
+                                    <tr>
+                                        <th>Processed</th>
+                                        <th>Score</th>
+                                        <th>True</th>
+                                        <th>Predicted</th>
+                                        <th>ProductId</th>
+                                        <th>Preview</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="suspiciousTableBody"></tbody>
+                            </table>
+                        </div>
+                    </article>
+
+                    <article class="chart-card">
+                        <h3>Low Confidence Samples</h3>
+                        <div class="table-wrapper compact">
+                            <table>
+                                <thead>
+                                    <tr>
+                                        <th>Processed</th>
+                                        <th>Score</th>
+                                        <th>Predicted</th>
+                                        <th>Confidence</th>
+                                        <th>ProductId</th>
+                                        <th>Preview</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="lowConfidenceTableBody"></tbody>
+                            </table>
+                        </div>
+                    </article>
+                </div>
+            </section>
+
+            <section id="events" class="section">
+                <div class="section-title">
+                    <div>
+                        <h2>Latest Prediction Events</h2>
+                        <p>Enriched MongoDB documents written by Spark Structured Streaming.</p>
+                    </div>
+                </div>
+
+                <div class="table-wrapper">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Processed</th>
+                                <th>ProductId</th>
+                                <th>Review Date</th>
+                                <th>Score</th>
+                                <th>True</th>
+                                <th>Predicted</th>
+                                <th>Confidence</th>
+                                <th>Model</th>
+                                <th>Source Split</th>
+                                <th>Batch</th>
+                                <th>Text Preview</th>
+                            </tr>
+                        </thead>
+                        <tbody id="latestTableBody"></tbody>
+                    </table>
+                </div>
+            </section>
+
+            <footer class="footer">
+                <span id="lastRefresh">Not refreshed yet</span>
+            </footer>
+        </main>
+    </div>
+
+    <script src="{{ url_for('static', filename='js/dashboard.js') }}"></script>
+</body>
+</html>

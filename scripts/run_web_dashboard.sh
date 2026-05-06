@@ -1,0 +1,15 @@
+#!/usr/bin/env bash
+set -e
+
+PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+cd "$PROJECT_ROOT"
+
+if [ ! -d ".venv" ]; then
+  echo "ERROR: .venv not found. Run this from the project where .venv exists."
+  exit 1
+fi
+
+source .venv/bin/activate
+export PYTHONPATH="$PROJECT_ROOT:$PYTHONPATH"
+
+python src/web/app.py
