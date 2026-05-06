@@ -23,6 +23,7 @@ OUTPUT_DIR = "data/processed/test_reviews_stream_json"
 FINAL_JSONL_PATH = "data/processed/test_reviews.jsonl"
 
 REQUIRED_DASHBOARD_PRODUCT_ID = "B001E4KFG0"
+MAX_PRODUCT_DEMO_ROWS = 500
 
 
 def load_clean_raw_data(spark):
@@ -32,8 +33,9 @@ def load_clean_raw_data(spark):
     This export is used for the online prediction simulation:
     Reviews.csv
     -> fixed train/validation/test split
-    -> export only the test split
-    -> Kafka producer streams the exported test rows.
+    -> export test split
+    -> ensure required dashboard ProductId sample exists
+    -> Kafka producer streams the exported rows.
 
     Important fields preserved:
     - ProductId: needed for product-level dashboard analysis
@@ -135,29 +137,161 @@ def load_clean_raw_data(spark):
     )
 
 
+def build_streaming_export_df(clean_df, test_df):
+    """
+    Build the final streaming export dataset.
+
+    Normal rule:
+    - Use the real 10% test split for online prediction simulation.
+
+    Requirement-compliance rule:
+    - The project specification asks for dashboard analytics for ProductId B001E4KFG0.
+    - If this ProductId is not naturally present in the test split, append a limited sample
+      from the clean dataset and mark it as source_split='product_demo'.
+
+    This keeps the export honest:
+    - source_split='test' means real test split row.
+    - source_split='product_demo' means row added only for the required ProductId dashboard section.
+    """
+
+    test_export_df = test_df.withColumn(
+        "source_split",
+        F.lit("test")
+    )
+
+    product_count_in_test = test_export_df.filter(
+        F.col("product_id") == REQUIRED_DASHBOARD_PRODUCT_ID
+    ).count()
+
+    print("========== DASHBOARD PRODUCTID REQUIREMENT CHECK ==========")
+    print(f"Required ProductId: {REQUIRED_DASHBOARD_PRODUCT_ID}")
+    print(
+        f"Rows in test split for ProductId {REQUIRED_DASHBOARD_PRODUCT_ID}: "
+        f"{product_count_in_test}"
+    )
+
+    if product_count_in_test > 0:
+        print("Required ProductId already exists in the test split.")
+        return test_export_df
+
+    product_demo_df = clean_df.filter(
+        F.col("product_id") == REQUIRED_DASHBOARD_PRODUCT_ID
+    ).limit(MAX_PRODUCT_DEMO_ROWS)
+
+    product_demo_count = product_demo_df.count()
+
+    print(
+        f"Rows available in clean dataset for ProductId "
+        f"{REQUIRED_DASHBOARD_PRODUCT_ID}: {product_demo_count}"
+    )
+
+    if product_demo_count == 0:
+        print(
+            "WARNING: Required ProductId was not found in the clean dataset. "
+            "Export will contain only the test split."
+        )
+        return test_export_df
+
+    product_demo_df = product_demo_df.withColumn(
+        "source_split",
+        F.lit("product_demo")
+    )
+
+    export_df = test_export_df.unionByName(product_demo_df)
+
+    print(
+        f"Added {product_demo_count} product_demo rows for "
+        f"ProductId {REQUIRED_DASHBOARD_PRODUCT_ID}."
+    )
+
+    return export_df
+
+
+def write_jsonl(export_df, spark):
+    os.makedirs("data/processed", exist_ok=True)
+
+    if os.path.exists(OUTPUT_DIR):
+        shutil.rmtree(OUTPUT_DIR)
+
+    if os.path.exists(FINAL_JSONL_PATH):
+        os.remove(FINAL_JSONL_PATH)
+
+    print("========== WRITING STREAMING EXPORT TO JSONL ==========")
+
+    export_df.select(
+        F.col("product_id").alias("product_id"),
+        F.col("user_id").alias("user_id"),
+        F.col("review_time").alias("review_time"),
+        F.col("review_date").cast("string").alias("review_date"),
+        F.col("Score").alias("score"),
+        F.col("summary").alias("summary"),
+        F.col("text").alias("text"),
+        F.col("label").alias("label"),
+        F.col("source_split").alias("source_split")
+    ).coalesce(1).write.mode("overwrite").json(OUTPUT_DIR)
+
+    part_files = glob.glob(f"{OUTPUT_DIR}/part-*.json")
+
+    if not part_files:
+        raise FileNotFoundError("No Spark JSON part file found.")
+
+    shutil.copy(part_files[0], FINAL_JSONL_PATH)
+
+    print("========== EXPORT COMPLETE ==========")
+    print(f"Final file: {FINAL_JSONL_PATH}")
+
+    print("========== EXPORTED JSONL SAMPLE ==========")
+    exported_df = spark.read.json(FINAL_JSONL_PATH)
+
+    exported_df.select(
+        "product_id",
+        "user_id",
+        "review_time",
+        "review_date",
+        "score",
+        "summary",
+        "text",
+        "label",
+        "source_split"
+    ).show(5, truncate=80)
+
+    print("========== EXPORTED SOURCE SPLIT DISTRIBUTION ==========")
+    exported_df.groupBy("source_split").count().show()
+
+    print("========== EXPORTED PRODUCTID REQUIREMENT CHECK ==========")
+    exported_product_count = exported_df.filter(
+        F.col("product_id") == REQUIRED_DASHBOARD_PRODUCT_ID
+    ).count()
+
+    print(
+        f"Rows exported for ProductId {REQUIRED_DASHBOARD_PRODUCT_ID}: "
+        f"{exported_product_count}"
+    )
+
+
 def main():
     spark = create_spark_session()
 
-    print("========== EXPORTING TEST SPLIT FROM TRAINING SPLIT FUNCTION ==========")
+    print("========== EXPORTING TEST SPLIT FOR STREAMING ==========")
 
-    df = load_clean_raw_data(spark)
+    clean_df = load_clean_raw_data(spark)
 
     print("========== CLEAN DATA CHECK BEFORE SPLIT ==========")
-    print(f"Clean rows: {df.count()}")
+    print(f"Clean rows: {clean_df.count()}")
 
     print("Score distribution:")
-    df.groupBy("Score").count().orderBy("Score").show()
+    clean_df.groupBy("Score").count().orderBy("Score").show()
 
     print("Label distribution:")
-    df.groupBy("label").count().show()
+    clean_df.groupBy("label").count().show()
 
     print("ProductId check:")
-    df.select("product_id").show(5, truncate=False)
+    clean_df.select("product_id").show(5, truncate=False)
 
     print("Review date check:")
-    df.select("review_time", "review_date").show(5, truncate=False)
+    clean_df.select("review_time", "review_date").show(5, truncate=False)
 
-    train_df, val_df, test_df = split_dataset(df)
+    train_df, val_df, test_df = split_dataset(clean_df)
 
     print("========== TEST SPLIT CHECK ==========")
     print(f"Test rows: {test_df.count()}")
@@ -174,55 +308,18 @@ def main():
     print("Test review date check:")
     test_df.select("review_time", "review_date").show(5, truncate=False)
 
-    print(f"Dashboard ProductId requirement check: {REQUIRED_DASHBOARD_PRODUCT_ID}")
-    specific_product_count = test_df.filter(
-        F.col("product_id") == "B001E4KFG0"
-    ).count()
-    print(f"Rows in test split for ProductId B001E4KFG0: {specific_product_count}")
+    export_df = build_streaming_export_df(
+        clean_df=clean_df,
+        test_df=test_df
+    )
 
-    os.makedirs("data/processed", exist_ok=True)
+    print("========== FINAL STREAMING EXPORT CHECK ==========")
+    print(f"Final export rows: {export_df.count()}")
 
-    if os.path.exists(OUTPUT_DIR):
-        shutil.rmtree(OUTPUT_DIR)
-
-    if os.path.exists(FINAL_JSONL_PATH):
-        os.remove(FINAL_JSONL_PATH)
-
-    print("========== WRITING TEST SPLIT TO JSONL ==========")
-
-    test_df.select(
-        F.col("product_id").alias("product_id"),
-        F.col("user_id").alias("user_id"),
-        F.col("review_time").alias("review_time"),
-        F.col("review_date").cast("string").alias("review_date"),
-        F.col("Score").alias("score"),
-        F.col("summary").alias("summary"),
-        F.col("text").alias("text"),
-        F.col("label").alias("label")
-    ).coalesce(1).write.mode("overwrite").json(OUTPUT_DIR)
-
-    part_files = glob.glob(f"{OUTPUT_DIR}/part-*.json")
-
-    if not part_files:
-        raise FileNotFoundError("No Spark JSON part file found.")
-
-    shutil.copy(part_files[0], FINAL_JSONL_PATH)
-
-    print("========== EXPORT COMPLETE ==========")
-    print(f"Final file: {FINAL_JSONL_PATH}")
-
-    print("========== EXPORTED JSONL SAMPLE ==========")
-    exported_df = spark.read.json(FINAL_JSONL_PATH)
-    exported_df.select(
-        "product_id",
-        "user_id",
-        "review_time",
-        "review_date",
-        "score",
-        "summary",
-        "text",
-        "label"
-    ).show(5, truncate=80)
+    write_jsonl(
+        export_df=export_df,
+        spark=spark
+    )
 
     spark.stop()
 
