@@ -30,6 +30,7 @@ SOURCE_NAME = "spark_structured_streaming"
 
 DEFAULT_LIMIT = 1000
 LOW_CONFIDENCE_THRESHOLD = 0.60
+REQUIRED_DASHBOARD_PRODUCT_ID = "B001E4KFG0"
 
 SENTIMENT_COLORS = {
     "positive": "#22C55E",
@@ -169,7 +170,7 @@ def check_mongodb_connection():
         return False, str(error)
 
 
-def build_query(sentiment_filter, score_filter, batch_filter):
+def build_query(sentiment_filter, score_filter, batch_filter, product_filter):
     query = {
         "source": SOURCE_NAME
     }
@@ -183,6 +184,9 @@ def build_query(sentiment_filter, score_filter, batch_filter):
     if batch_filter != "All":
         query["batch_id"] = int(batch_filter)
 
+    if product_filter != "All":
+        query["product_id"] = product_filter
+
     return query
 
 
@@ -193,7 +197,17 @@ def load_predictions(query, limit):
         "_id": 0,
         "text_preview": 1,
         "text": 1,
+        "product_id": 1,
+        "user_id": 1,
+        "review_time": 1,
+        "review_date": 1,
         "score": 1,
+        "summary": 1,
+        "text_preview": 1,
+        "text": 1,
+        "true_label": 1,
+        "source_split": 1,
+        "source_row_index": 1,
         "prediction": 1,
         "predicted_label": 1,
         "probability": 1,
@@ -213,12 +227,23 @@ def load_predictions(query, limit):
     return pd.DataFrame(list(cursor))
 
 
-def load_all_for_analytics():
+def load_all_for_analytics(query=None):
     collection = get_collection()
 
     projection = {
         "_id": 0,
+        "product_id": 1,
+        "user_id": 1,
+        "review_time": 1,
+        "review_date": 1,
         "score": 1,
+        "summary": 1,
+        "text_preview": 1,
+        "text": 1,
+        "true_label": 1,
+        "source_split": 1,
+        "source_row_index": 1,
+        "prediction": 1,
         "predicted_label": 1,
         "probability": 1,
         "batch_id": 1,
@@ -226,10 +251,13 @@ def load_all_for_analytics():
         "source": 1,
     }
 
-    cursor = collection.find(
-        {
+    if query is None:
+        query = {
             "source": SOURCE_NAME
-        },
+        }
+
+    cursor = collection.find(
+        query,
         projection
     )
 
@@ -252,6 +280,59 @@ def get_available_batches():
     ])
 
     return batches
+
+
+def get_available_product_ids(limit=250):
+    collection = get_collection()
+
+    pipeline = [
+        {
+            "$match": {
+                "source": SOURCE_NAME,
+                "product_id": {
+                    "$exists": True,
+                    "$ne": None
+                }
+            }
+        },
+        {
+            "$group": {
+                "_id": "$product_id",
+                "count": {
+                    "$sum": 1
+                }
+            }
+        },
+        {
+            "$sort": {
+                "count": -1,
+                "_id": 1
+            }
+        },
+        {
+            "$limit": limit
+        }
+    ]
+
+    products = [
+        row["_id"]
+        for row in collection.aggregate(pipeline)
+        if row.get("_id") is not None
+    ]
+
+    if REQUIRED_DASHBOARD_PRODUCT_ID not in products:
+        required_exists = collection.count_documents(
+            {
+                "source": SOURCE_NAME,
+                "product_id": REQUIRED_DASHBOARD_PRODUCT_ID
+            },
+            limit=1
+        )
+
+        if required_exists:
+            products.insert(0, REQUIRED_DASHBOARD_PRODUCT_ID)
+
+    return products
 
 
 def extract_confidence(probability):
@@ -287,6 +368,13 @@ def prepare_dataframe(df):
             errors="coerce"
         )
 
+    if "review_date" in df.columns:
+        df["review_date"] = df["review_date"].astype(str)
+        df["review_date_dt"] = pd.to_datetime(
+            df["review_date"],
+            errors="coerce"
+        )
+
     return df
 
 
@@ -314,6 +402,38 @@ def calculate_score_distribution(df):
     score_df.columns = ["score", "count"]
 
     return score_df
+
+
+def calculate_predictions_by_date(df):
+    if (
+        df.empty
+        or "review_date" not in df.columns
+        or "predicted_label" not in df.columns
+    ):
+        return pd.DataFrame(columns=["review_date", "predicted_label", "count"])
+
+    date_df = df.dropna(subset=["review_date"]).copy()
+
+    if date_df.empty:
+        return pd.DataFrame(columns=["review_date", "predicted_label", "count"])
+
+    date_summary = date_df.groupby(
+        ["review_date", "predicted_label"]
+    ).size().reset_index(name="count")
+
+    date_summary = date_summary.sort_values("review_date")
+
+    return date_summary
+
+
+def calculate_source_split_summary(df):
+    if df.empty or "source_split" not in df.columns:
+        return pd.DataFrame(columns=["source_split", "count"])
+
+    source_df = df["source_split"].value_counts().reset_index()
+    source_df.columns = ["source_split", "count"]
+
+    return source_df
 
 
 def calculate_confidence_by_sentiment(df):
@@ -595,6 +715,7 @@ def generate_pdf_report(analytics_df, predictions_df, active_filters):
             ["Predicted sentiment", active_filters["sentiment_filter"]],
             ["Amazon score", active_filters["score_filter"]],
             ["Batch ID", active_filters["batch_filter"]],
+            ["ProductId", active_filters["product_filter"]],
             ["Displayed latest rows", str(active_filters["limit"])],
         ],
         hAlign="LEFT"
@@ -687,6 +808,37 @@ def generate_pdf_report(analytics_df, predictions_df, active_filters):
             max_rows=20
         )
 
+    predictions_by_date = calculate_predictions_by_date(analytics_df)
+    add_pdf_table(
+        elements=elements,
+        dataframe=predictions_by_date,
+        title="7.1 Prediction Results by Review Date",
+        styles=styles,
+        max_rows=30
+    )
+
+    required_product_df = analytics_df[
+        analytics_df.get("product_id") == REQUIRED_DASHBOARD_PRODUCT_ID
+    ].copy() if "product_id" in analytics_df.columns else pd.DataFrame()
+
+    product_summary_df = calculate_sentiment_summary(required_product_df)
+    add_pdf_table(
+        elements=elements,
+        dataframe=product_summary_df,
+        title=f"7.2 ProductId {REQUIRED_DASHBOARD_PRODUCT_ID} Sentiment Summary",
+        styles=styles,
+        max_rows=10
+    )
+
+    product_score_df = calculate_score_distribution(required_product_df)
+    add_pdf_table(
+        elements=elements,
+        dataframe=product_score_df,
+        title=f"7.3 ProductId {REQUIRED_DASHBOARD_PRODUCT_ID} Score Distribution",
+        styles=styles,
+        max_rows=10
+    )
+
     batch_kpi_df = pd.DataFrame([
         {
             "metric": "Total micro-batches",
@@ -772,10 +924,14 @@ def generate_pdf_report(analytics_df, predictions_df, active_filters):
         styles=styles,
         columns=[
             "processed_at",
+            "product_id",
+            "review_date",
             "text_preview",
             "score",
+            "true_label",
             "predicted_label",
             "confidence",
+            "source_split",
             "batch_id"
         ],
         max_rows=20
@@ -881,6 +1037,25 @@ def render_sidebar():
         batch_options
     )
 
+    product_ids = get_available_product_ids()
+    product_options = ["All"] + product_ids
+
+    default_product_index = 0
+    if REQUIRED_DASHBOARD_PRODUCT_ID in product_options:
+        default_product_index = product_options.index(REQUIRED_DASHBOARD_PRODUCT_ID)
+
+    product_filter = st.sidebar.selectbox(
+        "ProductId",
+        product_options,
+        index=0
+    )
+
+    st.sidebar.caption(
+        f"Required dashboard ProductId available: {REQUIRED_DASHBOARD_PRODUCT_ID}"
+        if REQUIRED_DASHBOARD_PRODUCT_ID in product_options
+        else f"Required dashboard ProductId not found yet: {REQUIRED_DASHBOARD_PRODUCT_ID}"
+    )
+
     limit = st.sidebar.slider(
         "Latest records to display",
         min_value=50,
@@ -906,7 +1081,15 @@ def render_sidebar():
     st.sidebar.write("MongoDB source filter")
     st.sidebar.code(SOURCE_NAME)
 
-    return sentiment_filter, score_filter, batch_filter, limit, auto_refresh, refresh_interval
+    return (
+        sentiment_filter,
+        score_filter,
+        batch_filter,
+        product_filter,
+        limit,
+        auto_refresh,
+        refresh_interval
+    )
 
 
 def render_status_row(is_connected, connection_message, analytics_df, batch_kpis):
@@ -1166,6 +1349,128 @@ def render_score_sentiment_grouped_bar(analytics_df):
     )
 
 
+def render_predictions_by_date(analytics_df):
+    date_summary = calculate_predictions_by_date(analytics_df)
+
+    if date_summary.empty:
+        st.warning("No review date data available.")
+        return
+
+    fig = px.bar(
+        date_summary,
+        x="review_date",
+        y="count",
+        color="predicted_label",
+        title="Prediction Results by Review Date",
+        color_discrete_map=SENTIMENT_COLORS
+    )
+
+    fig.update_traces(
+        hovertemplate="<b>Date:</b> %{x}<br><b>Count:</b> %{y}<extra></extra>"
+    )
+
+    fig = create_plotly_layout(fig, height=420)
+
+    st.plotly_chart(
+        fig,
+        use_container_width=True
+    )
+
+
+def render_source_split_summary(analytics_df):
+    source_split_summary = calculate_source_split_summary(analytics_df)
+
+    if source_split_summary.empty:
+        st.warning("No source split data available.")
+        return
+
+    fig = px.bar(
+        source_split_summary,
+        x="source_split",
+        y="count",
+        title="Streaming Source Split Distribution",
+        text="count",
+        color="source_split"
+    )
+
+    fig.update_traces(
+        textposition="outside",
+        hovertemplate="<b>Source split:</b> %{x}<br><b>Count:</b> %{y}<extra></extra>"
+    )
+
+    fig = create_plotly_layout(fig, height=320)
+    fig.update_layout(showlegend=False)
+
+    st.plotly_chart(
+        fig,
+        use_container_width=True
+    )
+
+
+def render_required_product_analysis(analytics_df):
+    st.write(
+        f"Dedicated dashboard section for ProductId `{REQUIRED_DASHBOARD_PRODUCT_ID}`."
+    )
+
+    if analytics_df.empty or "product_id" not in analytics_df.columns:
+        st.warning("No ProductId data available yet.")
+        return
+
+    product_df = analytics_df[
+        analytics_df["product_id"] == REQUIRED_DASHBOARD_PRODUCT_ID
+    ].copy()
+
+    if product_df.empty:
+        st.warning(
+            f"No predictions found for ProductId {REQUIRED_DASHBOARD_PRODUCT_ID}. "
+            "Run the enriched export and stream again if needed."
+        )
+        return
+
+    average_confidence = None
+    if "confidence" in product_df.columns:
+        average_confidence = product_df["confidence"].mean()
+
+    col1, col2, col3, col4 = st.columns(4)
+
+    col1.metric("Product Predictions", f"{len(product_df):,}")
+
+    if "score" in product_df.columns and not product_df["score"].dropna().empty:
+        col2.metric(
+            "Average Score",
+            f"{product_df['score'].mean():.2f}"
+        )
+    else:
+        col2.metric("Average Score", "N/A")
+
+    if average_confidence is not None:
+        col3.metric(
+            "Average Confidence",
+            f"{average_confidence * 100:.2f}%"
+        )
+    else:
+        col3.metric("Average Confidence", "N/A")
+
+    if "source_split" in product_df.columns:
+        source_values = ", ".join(
+            sorted(product_df["source_split"].dropna().astype(str).unique())
+        )
+        col4.metric("Source Split", source_values or "N/A")
+    else:
+        col4.metric("Source Split", "N/A")
+
+    col5, col6 = st.columns(2)
+
+    with col5:
+        render_sentiment_pie(product_df)
+
+    with col6:
+        render_score_distribution(product_df)
+
+    st.write(f"Latest predictions for ProductId {REQUIRED_DASHBOARD_PRODUCT_ID}")
+    render_latest_predictions(product_df.sort_values("processed_at", ascending=False))
+
+
 def render_confidence_by_sentiment(analytics_df):
     confidence_by_sentiment = calculate_confidence_by_sentiment(analytics_df)
 
@@ -1287,11 +1592,15 @@ def render_latest_predictions(predictions_df):
 
     display_columns = [
         "processed_at",
+        "product_id",
+        "review_date",
         "text_preview",
         "score",
+        "true_label",
         "predicted_label",
         "confidence",
         "probability_values",
+        "source_split",
         "batch_id"
     ]
 
@@ -1366,7 +1675,15 @@ def main():
         )
         st.stop()
 
-    sentiment_filter, score_filter, batch_filter, limit, auto_refresh, refresh_interval = render_sidebar()
+    (
+        sentiment_filter,
+        score_filter,
+        batch_filter,
+        product_filter,
+        limit,
+        auto_refresh,
+        refresh_interval
+    ) = render_sidebar()
 
     if auto_refresh:
         st_autorefresh(
@@ -1377,10 +1694,11 @@ def main():
     query = build_query(
         sentiment_filter=sentiment_filter,
         score_filter=score_filter,
-        batch_filter=batch_filter
+        batch_filter=batch_filter,
+        product_filter=product_filter
     )
 
-    analytics_df = load_all_for_analytics()
+    analytics_df = load_all_for_analytics(query=query)
     analytics_df = prepare_dataframe(analytics_df)
 
     predictions_df = load_predictions(
@@ -1396,6 +1714,7 @@ def main():
         "sentiment_filter": sentiment_filter,
         "score_filter": score_filter,
         "batch_filter": batch_filter,
+        "product_filter": product_filter,
         "limit": limit,
     }
 
@@ -1451,6 +1770,24 @@ def main():
 
     with col6:
         render_score_sentiment_grouped_bar(analytics_df)
+
+    st.markdown(
+        '<div class="section-title">Date and Source Analytics</div>',
+        unsafe_allow_html=True
+    )
+    col_date, col_source = st.columns([2, 1])
+
+    with col_date:
+        render_predictions_by_date(analytics_df)
+
+    with col_source:
+        render_source_split_summary(analytics_df)
+
+    st.markdown(
+        '<div class="section-title">Required ProductId Analysis</div>',
+        unsafe_allow_html=True
+    )
+    render_required_product_analysis(analytics_df)
 
     st.markdown(
         '<div class="section-title">Model Confidence by Class</div>',
