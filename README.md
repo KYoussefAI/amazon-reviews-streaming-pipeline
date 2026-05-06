@@ -1,8 +1,8 @@
 # Amazon Reviews Real-Time Sentiment Command Center
 
-A production-oriented Big Data project that streams Amazon review events through Kafka, applies Spark ML sentiment prediction with Spark Structured Streaming, stores enriched predictions in MongoDB, and visualizes operational analytics in a Streamlit dashboard.
+A production-oriented Big Data project that streams Amazon review events through Kafka, applies Spark ML sentiment prediction with Spark Structured Streaming, stores enriched prediction results in MongoDB, visualizes analytics in a Streamlit dashboard, and includes an optional Airflow orchestration layer for batch preparation tasks.
 
-This project was built phase by phase as a practical data engineering training lab: ingestion, streaming, distributed processing, machine learning inference, storage, dashboarding, validation, reporting, and documentation.
+This project was built phase by phase as a practical data engineering training lab: ingestion, streaming, distributed processing, machine learning inference, storage, dashboarding, orchestration, validation, and documentation.
 
 ---
 
@@ -10,56 +10,36 @@ This project was built phase by phase as a practical data engineering training l
 
 1. [Project Objective](#1-project-objective)
 2. [Current Status](#2-current-status)
-3. [Architecture](#3-architecture)
-4. [Requirement Coverage](#4-requirement-coverage)
+3. [Requirement Coverage](#3-requirement-coverage)
+4. [Architecture](#4-architecture)
 5. [Tech Stack](#5-tech-stack)
 6. [Dataset](#6-dataset)
 7. [Repository Structure](#7-repository-structure)
-8. [Completed Phases](#8-completed-phases)
-9. [Spark ML Training Pipeline](#9-spark-ml-training-pipeline)
-10. [Final Model Metrics](#10-final-model-metrics)
-11. [Streaming Export Layer](#11-streaming-export-layer)
-12. [Kafka Producer](#12-kafka-producer)
-13. [Spark Structured Streaming Inference](#13-spark-structured-streaming-inference)
-14. [MongoDB Storage](#14-mongodb-storage)
-15. [Streamlit Dashboard](#15-streamlit-dashboard)
-16. [PDF Report Export](#16-pdf-report-export)
-17. [Screenshots](#17-screenshots)
-18. [How to Run](#18-how-to-run)
-19. [MongoDB Validation Commands](#19-mongodb-validation-commands)
-20. [Git and Artifact Rules](#20-git-and-artifact-rules)
-21. [Future Improvements](#21-future-improvements)
-22. [Portfolio Summary](#22-portfolio-summary)
+8. [Spark ML Training Pipeline](#8-spark-ml-training-pipeline)
+9. [Final Model Metrics](#9-final-model-metrics)
+10. [Streaming Test Export](#10-streaming-test-export)
+11. [Kafka Producer](#11-kafka-producer)
+12. [Spark Structured Streaming Inference](#12-spark-structured-streaming-inference)
+13. [MongoDB Storage](#13-mongodb-storage)
+14. [Streamlit Dashboard](#14-streamlit-dashboard)
+15. [Airflow Orchestration](#15-airflow-orchestration)
+16. [Screenshots](#16-screenshots)
+17. [How to Run](#17-how-to-run)
+18. [Validation Commands](#18-validation-commands)
+19. [Git and Artifact Rules](#19-git-and-artifact-rules)
+20. [Future Improvements](#20-future-improvements)
 
 ---
 
 ## 1. Project Objective
 
-The objective is to build a complete real-time Big Data sentiment analysis pipeline for Amazon product reviews.
+The objective is to build a complete Big Data sentiment analysis pipeline for Amazon product reviews:
 
 ```text
-Amazon Reviews CSV
-→ Streaming test export
+Amazon Reviews Dataset
+→ Test Split Export
 → Kafka Producer
-→ Kafka topic
-→ Spark Structured Streaming
-→ Saved Spark ML model
-→ MongoDB
-→ Streamlit dashboard
-→ PDF report
-```
-
-The project simulates a real data engineering workflow where review events are ingested continuously, processed by a distributed streaming engine, enriched with machine learning predictions, stored in a NoSQL database, and monitored through an analytics dashboard.
-
----
-
-## 2. Current Status
-
-Current completed architecture:
-
-```text
-Producer
-→ Kafka
+→ Kafka Topic
 → Spark Structured Streaming
 → Spark ML Prediction
 → MongoDB
@@ -67,139 +47,138 @@ Producer
 → PDF Report
 ```
 
+The project simulates a real data engineering workflow where review events are ingested continuously, processed by a distributed streaming engine, enriched with machine learning predictions, stored in a NoSQL database, and monitored through dashboards and reports.
+
+---
+
+## 2. Current Status
+
+Current completed runtime architecture:
+
+```text
+Producer → Kafka → Spark Structured Streaming → Spark ML Prediction → MongoDB → Streamlit Dashboard
+```
+
+Optional orchestration layer:
+
+```text
+Airflow → validate project → validate dataset → export test split → train model → validate saved model
+```
+
 Completed:
 
 - Kafka and Zookeeper running with Docker Compose.
 - MongoDB running as a Docker service.
-- Test split exported for online prediction simulation.
-- Kafka producer streaming enriched Amazon review events.
 - Spark-only ML training pipeline.
 - TF-IDF feature engineering using unigrams and bigrams.
 - Class-weighted Logistic Regression for imbalanced sentiment classes.
 - Simulated Annealing hyperparameter tuning.
 - Final Spark `PipelineModel` saved locally.
+- Test split exported for streaming simulation.
+- ProductId, UserId, review date, summary, text, true label, and source split preserved end-to-end.
+- Kafka producer streaming enriched Amazon review events.
 - Spark Structured Streaming inference from Kafka.
-- Enriched prediction documents written to MongoDB.
-- ProductId, UserId, review date, score, true label, prediction, probability, batch ID, and source split preserved end-to-end.
+- Prediction documents written to MongoDB.
 - Streamlit dashboard connected to MongoDB.
-- Dashboard KPIs, charts, filters, live refresh, confidence analytics, risk monitoring, latest events table, ProductId analysis, prediction-by-date analytics, and PDF report export.
-- Requirement ProductId `B001E4KFG0` handled in the dashboard.
-
-Final clean dashboard run observed:
-
-| Metric | Value |
-|---|---:|
-| Total predictions | 56,813 |
-| Latest batch ID | 7,146 |
-| Average confidence | 87.08% |
-| Positive predictions | 38,899 |
-| Negative predictions | 9,746 |
-| Neutral predictions | 8,168 |
+- Dashboard KPIs, filters, confidence analytics, score analytics, batch analytics, ProductId analytics, prediction-by-date analytics, latest events table, and PDF report export.
+- Airflow DAG added and validated for batch orchestration.
+- GitHub-ready README and screenshots.
 
 ---
 
-## 3. Architecture
+## 3. Requirement Coverage
 
-### 3.1 High-Level Architecture
-
-```text
-                ┌─────────────────────────┐
-                │  Amazon Reviews CSV     │
-                │  data/raw/Reviews.csv   │
-                └───────────┬─────────────┘
-                            │
-                            ▼
-                ┌─────────────────────────┐
-                │ Test Split Export       │
-                │ export_test_split_...py │
-                └───────────┬─────────────┘
-                            │ JSONL test events
-                            ▼
-                ┌─────────────────────────┐
-                │ Kafka Producer          │
-                │ src/ingestion/producer.py
-                └───────────┬─────────────┘
-                            │ JSON messages
-                            ▼
-                ┌─────────────────────────┐
-                │ Kafka Topic             │
-                │ amazon_reviews          │
-                └───────────┬─────────────┘
-                            │ streaming read
-                            ▼
-                ┌─────────────────────────┐
-                │ Spark Structured        │
-                │ Streaming               │
-                └───────────┬─────────────┘
-                            │
-                            ▼
-                ┌─────────────────────────┐
-                │ Spark ML PipelineModel  │
-                │ TF-IDF + Logistic Reg.  │
-                └───────────┬─────────────┘
-                            │ predictions
-                            ▼
-                ┌─────────────────────────┐
-                │ MongoDB                 │
-                │ sentiment_predictions   │
-                └───────────┬─────────────┘
-                            │ query
-                            ▼
-                ┌─────────────────────────┐
-                │ Streamlit Dashboard     │
-                │ Command Center          │
-                └─────────────────────────┘
-```
-
-### 3.2 Runtime Data Flow
-
-```text
-data/processed/test_reviews.jsonl
-→ producer.py
-→ Kafka topic: amazon_reviews
-→ predict_stream.py
-→ saved Spark PipelineModel
-→ mongodb_writer.py
-→ amazon_reviews_db.sentiment_predictions
-→ dashboard/app.py
-```
-
-### 3.3 Why the Streaming Export Layer Exists
-
-The project requirement uses the 10% reserved test data for online prediction simulation. Instead of streaming the raw `Reviews.csv` directly, the project first prepares a clean JSONL file containing the test reviews and required metadata.
-
-This keeps responsibilities clean:
-
-| Layer | Responsibility |
-|---|---|
-| Export script | Prepare clean test events |
-| Producer | Send prepared events to Kafka |
-| Spark Streaming | Predict sentiment in real time |
-| MongoDB writer | Store prediction history |
-| Dashboard | Analyze stored prediction results |
-
----
-
-## 4. Requirement Coverage
-
-The project PDF asks for:
-
-| Requirement | Implemented? | Project implementation |
+| Project Requirement | Status | Implementation |
 |---|---:|---|
-| Real-time review exploration with Kafka | Yes | `producer.py` sends review events to Kafka topic `amazon_reviews` |
-| Data preparation, vectorization, TF-IDF | Yes | Spark ML pipeline uses RegexTokenizer, StopWordsRemover, CountVectorizer, IDF |
-| Dataset partitioning and label creation | Yes | 80% train, 10% validation, 10% test; score-based sentiment label |
-| Training on 80% of data | Yes | `train_spark_pipeline.py` |
-| Validation and hyperparameter tuning on 10% | Yes | Validation metrics + Simulated Annealing tuner |
-| Final testing on 10% | Yes | Final test metrics reported |
-| Choose and save best model | Yes | Best Spark `PipelineModel` saved locally |
-| Online prediction using 10% test data | Yes | Exported test split streamed through Kafka |
-| Offline dashboard from MongoDB predictions | Yes | Streamlit dashboard reads MongoDB predictions |
-| Prediction results by date | Yes | Dashboard section `Prediction Results by Review Date` |
-| ProductId `B001E4KFG0` scoring | Yes | Dedicated dashboard section `Required ProductId Analysis` |
-| GitHub upload | Yes | Repository prepared for GitHub |
+| Real-time review exploration with Kafka | Completed | `src/ingestion/producer.py`, Kafka topic `amazon_reviews` |
+| Data preparation: vectorization and TF-IDF | Completed | Spark ML pipeline with `RegexTokenizer`, `StopWordsRemover`, `CountVectorizer`, `IDF` |
+| Dataset partitioning and label creation | Completed | `train_spark_pipeline.py`, `export_test_split_for_streaming.py` |
+| Train model on 80% of Reviews.csv | Completed | Spark training script |
+| Validate and tune on 10% | Completed | Validation metrics + Simulated Annealing tuner |
+| Test on 10% | Completed | Final test metrics + streaming export |
+| Choose best model | Completed | Spark TF-IDF + Logistic Regression selected |
+| Save best model | Completed | `src/spark/model/sentiment_pipeline_model` |
+| Online prediction using test data | Completed | Kafka producer + Spark Structured Streaming |
+| Offline dashboard from MongoDB predictions | Completed | Streamlit dashboard |
+| Prediction results by date | Completed | Dashboard + PDF report |
+| ProductId `B001E4KFG0` scoring | Completed | Dedicated ProductId dashboard section |
+| MongoDB prediction archive | Completed | `amazon_reviews_db.sentiment_predictions` |
+| Docker services | Completed | Kafka, Zookeeper, MongoDB |
+| GitHub upload | Completed / ready | README, screenshots, scripts |
+| Airflow orchestration | Added as portfolio improvement | Batch orchestration only |
 
-Important note: the current dashboard implementation uses Streamlit + Plotly. The project PDF mentions Django / Flask / JavaScript for web deployment. Streamlit was used as the implemented analytics dashboard for this version. A Flask or Django web layer is listed as a future improvement, not as a completed feature.
+---
+
+## 4. Architecture
+
+### 4.1 High-Level Runtime Architecture
+
+```text
+                ┌──────────────────────────┐
+                │  Amazon Reviews CSV      │
+                │  data/raw/Reviews.csv    │
+                └────────────┬─────────────┘
+                             │
+                             ▼
+                ┌──────────────────────────┐
+                │ Test Split Export        │
+                │ export_test_split...py   │
+                └────────────┬─────────────┘
+                             │ JSONL
+                             ▼
+                ┌──────────────────────────┐
+                │ Kafka Producer           │
+                │ src/ingestion/producer.py│
+                └────────────┬─────────────┘
+                             │ JSON events
+                             ▼
+                ┌──────────────────────────┐
+                │ Kafka Topic              │
+                │ amazon_reviews           │
+                └────────────┬─────────────┘
+                             │ stream read
+                             ▼
+                ┌──────────────────────────┐
+                │ Spark Structured         │
+                │ Streaming                │
+                └────────────┬─────────────┘
+                             │
+                             ▼
+                ┌──────────────────────────┐
+                │ Spark ML PipelineModel   │
+                │ TF-IDF + LogisticReg     │
+                └────────────┬─────────────┘
+                             │ predictions
+                             ▼
+                ┌──────────────────────────┐
+                │ MongoDB                  │
+                │ sentiment_predictions    │
+                └────────────┬─────────────┘
+                             │ query
+                             ▼
+                ┌──────────────────────────┐
+                │ Streamlit Dashboard      │
+                │ Command Center + Report  │
+                └──────────────────────────┘
+```
+
+### 4.2 Airflow Batch Orchestration Architecture
+
+```text
+Airflow DAG: amazon_reviews_batch_orchestration
+
+start
+→ check_project_structure
+→ check_raw_dataset_exists
+→ export_test_split_for_streaming
+→ validate_streaming_export
+→ train_spark_model
+→ validate_saved_model
+→ print_next_runtime_commands
+→ end
+```
+
+Airflow is used for batch preparation and validation. It does **not** replace the live Kafka/Spark streaming services.
 
 ---
 
@@ -211,13 +190,15 @@ Important note: the current dashboard implementation uses Streamlit + Plotly. Th
 | Message Broker | Apache Kafka |
 | Kafka Coordination | Zookeeper |
 | Containerized Services | Docker Compose |
-| Streaming Processing | Apache Spark Structured Streaming |
+| Distributed Processing | Apache Spark / PySpark |
+| Streaming Processing | Spark Structured Streaming |
 | Machine Learning | Spark MLlib |
 | Feature Engineering | RegexTokenizer, StopWordsRemover, CountVectorizer, IDF, NGram, VectorAssembler |
 | Model | Class-weighted Logistic Regression |
 | Storage | MongoDB |
 | Dashboard | Streamlit + Plotly |
 | Reporting | ReportLab PDF export |
+| Orchestration | Apache Airflow |
 | Environment | WSL/Linux recommended |
 | Version Control | Git + GitHub |
 
@@ -237,20 +218,21 @@ Expected local path:
 data/raw/Reviews.csv
 ```
 
-Main fields used:
+Important raw columns:
 
-| Original column | Normalized field | Role |
-|---|---|---|
-| `ProductId` | `product_id` | Product-level dashboard analysis |
-| `UserId` | `user_id` | Review metadata |
-| `Time` | `review_time`, `review_date` | Time/date analytics |
-| `Score` | `score` | Original Amazon rating |
-| `Summary` | `summary` | Short review summary |
-| `Text` | `text` | Review text used for prediction |
+| Column | Role |
+|---|---|
+| `Id` | Review identifier |
+| `ProductId` | Product identifier |
+| `UserId` | User identifier |
+| `Score` | Amazon rating from 1 to 5 |
+| `Time` | Unix timestamp |
+| `Summary` | Short review summary |
+| `Text` | Full review text |
 
-Sentiment labeling rule:
+Sentiment target rule:
 
-| Score condition | Sentiment label |
+| Score condition | Target label |
 |---|---|
 | `Score < 3` | `negative` |
 | `Score == 3` | `neutral` |
@@ -262,27 +244,32 @@ The raw CSV is not committed to Git because it is large.
 
 ## 7. Repository Structure
 
-Current professional structure:
+Current project structure:
 
 ```text
 BIG DATA PROJECT/
+│
+├── airflow/
+│   ├── README_AIRFLOW.md
+│   ├── dags/
+│   │   └── amazon_reviews_batch_pipeline.py
+│   ├── requirements-airflow.txt
+│   └── scripts/
+│       ├── setup_airflow.sh
+│       ├── start_airflow.sh
+│       ├── stop_airflow.sh
+│       └── test_dag.sh
+│
+├── data/
+│   ├── raw/
+│   │   └── Reviews.csv
+│   └── processed/
+│       └── test_reviews.jsonl
 │
 ├── docs/
 │   ├── PHASE5.md
 │   ├── spark_sentiment_tuning_report.md
 │   └── screenshots/
-│       ├── 01_project_structure.png
-│       ├── 02_docker_services_running.png
-│       ├── 03_full_training_metrics.png
-│       ├── 04_spark_streaming_to_mongodb.png
-│       ├── 05_producer_streaming_reviews.png
-│       ├── 06_mongodb_latest_predictions.png
-│       ├── 13_dashboard_overview_kpis.png
-│       ├── 14_dashboard_prediction_results_by_date.png
-│       ├── 15_dashboard_productid_filter.png
-│       ├── 16_dashboard_productid_b001e4kfg0_analysis.png
-│       ├── 17_dashboard_enriched_latest_events.png
-│       └── 18_dashboard_pdf_report_export.png
 │
 ├── kafka/
 │   ├── docker-compose.yml
@@ -294,64 +281,36 @@ BIG DATA PROJECT/
 │
 ├── src/
 │   ├── __init__.py
-│   │
 │   ├── dashboard/
 │   │   └── app.py
-│   │
 │   ├── experiments/
 │   │   ├── preprocessing/
-│   │   │   ├── __init__.py
-│   │   │   ├── clean.py
-│   │   │   ├── dataset.py
-│   │   │   ├── label.py
-│   │   │   ├── resampling.py
-│   │   │   └── vectorizer.py
 │   │   └── training/
-│   │       ├── __init__.py
-│   │       └── train.py
-│   │
 │   ├── ingestion/
 │   │   ├── __init__.py
 │   │   └── producer.py
-│   │
 │   ├── spark/
-│   │   ├── training/
-│   │   │   ├── __init__.py
-│   │   │   ├── train_spark_pipeline.py
-│   │   │   ├── tune_spark_pipeline_sa.py
-│   │   │   └── export_test_split_for_streaming.py
-│   │   │
+│   │   ├── model/
+│   │   │   └── sentiment_pipeline_model/
 │   │   ├── streaming/
 │   │   │   ├── __init__.py
 │   │   │   ├── consumer.py
 │   │   │   └── predict_stream.py
-│   │   │
-│   │   └── model/
-│   │       └── sentiment_pipeline_model/
-│   │
+│   │   └── training/
+│   │       ├── __init__.py
+│   │       ├── export_test_split_for_streaming.py
+│   │       ├── train_spark_pipeline.py
+│   │       └── tune_spark_pipeline_sa.py
 │   └── storage/
 │       ├── __init__.py
 │       ├── mongodb_writer.py
 │       └── test_mongodb_connection.py
 │
-├── data/
-│   ├── raw/
-│   │   └── Reviews.csv
-│   └── processed/
-│       └── test_reviews.jsonl
-│
-├── exports/
-│   └── reports/
-│
-├── backups/
-│   └── mongodb/
-│
 ├── project_context.md
 ├── README.md
 ├── requirements.txt
 ├── structure.txt
-├── useful_commands.txt
-└── .gitignore
+└── useful_commands.txt
 ```
 
 Local-only generated artifacts:
@@ -363,37 +322,17 @@ src/spark/model/
 src/spark/models/
 spark-warehouse/
 metastore_db/
+airflow/airflow_home/
+airflow/logs/
 exports/
 backups/
 .venv/
-venv/
-env/
-big_data_env/
 __pycache__/
 ```
 
 ---
 
-## 8. Completed Phases
-
-| Phase | Status | Output |
-|---|---:|---|
-| Phase 1 | Completed | Kafka + Zookeeper + basic producer/consumer |
-| Phase 2 | Completed | Text cleaning and TF-IDF experimentation |
-| Phase 3 | Completed | Dataset creation and train/validation/test split |
-| Phase 4 | Completed | Initial Spark Logistic Regression model |
-| Phase 5 | Completed | Validation metrics and imbalance analysis |
-| Phase 6 | Completed | Final test evaluation |
-| Phase 7 | Completed | Model selection and saved Spark model |
-| Phase 8 | Completed | Spark Structured Streaming inference from Kafka |
-| Phase 9 | Completed | MongoDB storage with `foreachBatch` |
-| Phase 10 | Completed | Streamlit dashboard from MongoDB |
-| Phase 11 | Completed | PDF report export |
-| Phase 12 | Completed | ProductId/date metadata preserved end-to-end and dashboard requirement compliance |
-
----
-
-## 9. Spark ML Training Pipeline
+## 8. Spark ML Training Pipeline
 
 Production training file:
 
@@ -433,15 +372,15 @@ Saved model path:
 src/spark/model/sentiment_pipeline_model
 ```
 
-The model folder is generated locally and should not be committed.
+The saved model folder is generated locally and should not be committed.
 
 ---
 
-## 10. Final Model Metrics
+## 9. Final Model Metrics
 
 The final full-data training run used valid Amazon review rows after cleaning and filtering.
 
-### Full Dataset Class Distribution
+### 9.1 Full Dataset Class Distribution
 
 | Label | Count |
 |---|---:|
@@ -455,7 +394,7 @@ Total rows:
 568,444
 ```
 
-### Split Sizes
+### 9.2 Split Sizes
 
 | Split | Rows |
 |---|---:|
@@ -463,7 +402,7 @@ Total rows:
 | Validation | 56,630 |
 | Test | 56,804 |
 
-### Class Weights
+### 9.3 Class Weights
 
 | Label | Weight |
 |---|---:|
@@ -471,7 +410,7 @@ Total rows:
 | negative | 2.2639 |
 | neutral | 4.4364 |
 
-### Validation Metrics
+### 9.4 Validation Metrics
 
 | Metric | Value |
 |---|---:|
@@ -481,7 +420,7 @@ Total rows:
 | Negative F1 | 0.7003 |
 | Neutral F1 | 0.4206 |
 
-### Test Metrics
+### 9.5 Test Metrics
 
 | Metric | Value |
 |---|---:|
@@ -491,55 +430,46 @@ Total rows:
 | Negative F1 | 0.6953 |
 | Neutral F1 | 0.4266 |
 
-Validation and test metrics are close, so the model generalizes reasonably well for a first production baseline.
+Macro F1 is tracked because the dataset is imbalanced. Accuracy alone would over-reward the dominant positive class.
 
 ---
 
-## 11. Streaming Export Layer
+## 10. Streaming Test Export
 
-Streaming export file:
+Export file:
 
 ```text
 src/spark/training/export_test_split_for_streaming.py
 ```
 
-Output file:
+Output:
 
 ```text
 data/processed/test_reviews.jsonl
 ```
 
-Role:
+The export preserves the fields required for downstream Kafka, MongoDB, and dashboard analysis:
 
-```text
-Reviews.csv
-→ clean valid rows
-→ create label
-→ convert Unix Time into review_time and review_date
-→ use the same split function as training
-→ export the 10% test split
-→ ensure ProductId B001E4KFG0 is available for dashboard requirement analysis
+```json
+{
+  "product_id": "B001E4KFG0",
+  "user_id": "A3SGXH7AUHU8GW",
+  "review_time": "2011-04-27 01:00:00",
+  "review_date": "2011-04-27",
+  "score": 5,
+  "summary": "Good Quality Dog Food",
+  "text": "I have bought several of the Vitality canned dog food products...",
+  "label": "positive",
+  "source_split": "product_demo",
+  "source_row_index": 0
+}
 ```
 
-Exported event schema:
-
-| Field | Meaning |
-|---|---|
-| `product_id` | Product identifier |
-| `user_id` | User identifier |
-| `review_time` | Review timestamp as readable string |
-| `review_date` | Review date for dashboard time analytics |
-| `score` | Original Amazon score |
-| `summary` | Review summary |
-| `text` | Full review text |
-| `label` | True sentiment label from score |
-| `source_split` | `test` or `product_demo` |
-
-The `product_demo` marker is used only when adding the required ProductId sample for `B001E4KFG0`. This keeps the dataset transparent and avoids silently mixing requirement-specific rows with the regular test split.
+The required ProductId `B001E4KFG0` is preserved for the dashboard requirement. If it does not naturally appear in the test split, the export adds it as a controlled `product_demo` row so the ProductId analysis remains available.
 
 ---
 
-## 12. Kafka Producer
+## 11. Kafka Producer
 
 Producer file:
 
@@ -559,106 +489,79 @@ Kafka topic:
 amazon_reviews
 ```
 
-Kafka message schema:
+The producer streams enriched JSON messages containing:
 
-| Field | Meaning |
-|---|---|
-| `product_id` | Product ID preserved from Amazon dataset |
-| `user_id` | User ID preserved from Amazon dataset |
-| `review_time` | Review timestamp |
-| `review_date` | Review date |
-| `score` | Original Amazon score |
-| `summary` | Review summary |
-| `text` | Review text |
-| `label` | True label |
-| `source_split` | Origin marker |
-| `source_row_index` | Row index in exported stream file |
+```text
+product_id
+user_id
+review_time
+review_date
+score
+summary
+text
+label
+source_split
+source_row_index
+```
 
-The producer does not train or transform features. It only sends prepared review events to Kafka.
+This ensures metadata is not lost before Spark Structured Streaming.
 
 ---
 
-## 13. Spark Structured Streaming Inference
+## 12. Spark Structured Streaming Inference
 
-Streaming prediction file:
+Streaming file:
 
 ```text
 src/spark/streaming/predict_stream.py
 ```
 
-The streaming job:
+Responsibilities:
 
-1. Starts a Spark session.
-2. Loads the saved Spark `PipelineModel`.
-3. Reads JSON messages from Kafka topic `amazon_reviews`.
-4. Parses incoming review metadata.
-5. Adds schema-compatible columns needed by the saved pipeline.
-6. Applies the Spark ML model to the review text.
-7. Converts numeric predictions into readable sentiment labels.
-8. Sends enriched predictions to MongoDB using `foreachBatch`.
+1. Read JSON messages from Kafka.
+2. Parse enriched message schema.
+3. Load the saved Spark `PipelineModel`.
+4. Apply sentiment prediction to each review.
+5. Preserve original metadata.
+6. Write enriched predictions to MongoDB using `foreachBatch`.
 
-Current label mapping:
+Streaming input:
 
 ```text
-0.0 → positive
-1.0 → negative
-2.0 → neutral
+Kafka topic: amazon_reviews
 ```
 
-Important inference principle:
+Streaming output:
 
 ```text
-The streaming job does not train.
-It only loads the saved model and predicts incoming events.
+MongoDB collection: amazon_reviews_db.sentiment_predictions
 ```
+
+Important: the streaming job does not train a model. It only loads the saved Spark model and applies inference.
 
 ---
 
-## 14. MongoDB Storage
+## 13. MongoDB Storage
 
-MongoDB target:
-
-```text
-URI: mongodb://localhost:27017
-Database: amazon_reviews_db
-Collection: sentiment_predictions
-```
-
-Storage writer:
+Mongo writer file:
 
 ```text
 src/storage/mongodb_writer.py
 ```
 
-Spark writes predictions using:
+Database:
 
-```python
-foreachBatch(write_predictions_to_mongodb)
+```text
+amazon_reviews_db
 ```
 
-Each MongoDB document contains:
+Collection:
 
-| Field | Description |
-|---|---|
-| `product_id` | Product identifier |
-| `user_id` | User identifier |
-| `review_time` | Review timestamp |
-| `review_date` | Review date for dashboard charts |
-| `score` | Original Amazon score |
-| `summary` | Review summary |
-| `text_preview` | Short preview of the review text |
-| `text` | Full review text |
-| `true_label` | Score-based label |
-| `source_split` | `test` or `product_demo` |
-| `source_row_index` | Source row index from the producer |
-| `prediction` | Numeric Spark prediction |
-| `predicted_label` | Readable sentiment label |
-| `probability` | Class probability distribution |
-| `batch_id` | Spark micro-batch ID |
-| `processed_at` | Insertion timestamp |
-| `source` | Source marker, usually `spark_structured_streaming` |
+```text
+sentiment_predictions
+```
 
-Example document:
+Stored document schema:
 
 ```json
 {
@@ -669,6 +572,7 @@ Example document:
   "score": 5,
   "summary": "Good Quality Dog Food",
   "text_preview": "I have bought several of the Vitality canned dog food products...",
+  "text": "Full review text",
   "true_label": "positive",
   "source_split": "product_demo",
   "source_row_index": 0,
@@ -676,13 +580,14 @@ Example document:
   "predicted_label": "positive",
   "probability": [0.8496, 0.0027, 0.1476],
   "batch_id": 113,
+  "processed_at": "2026-05-06T16:21:26Z",
   "source": "spark_structured_streaming"
 }
 ```
 
 ---
 
-## 15. Streamlit Dashboard
+## 14. Streamlit Dashboard
 
 Dashboard file:
 
@@ -696,156 +601,294 @@ Dashboard title:
 Amazon Reviews Sentiment Command Center
 ```
 
-The dashboard connects directly to MongoDB and reads from:
-
-```text
-amazon_reviews_db.sentiment_predictions
-```
-
-Dashboard features:
+Implemented features:
 
 - MongoDB connection status.
-- Total prediction count.
-- Latest Spark micro-batch ID.
-- Average model confidence for global dashboard context.
+- Total predictions.
+- Latest batch ID.
+- Average confidence.
 - Positive, negative, and neutral prediction counts.
 - Low-confidence prediction count.
-- Sentiment distribution donut chart.
-- Confidence distribution chart.
-- Records per micro-batch line chart.
-- Batch summary table.
-- Amazon score distribution chart.
-- Score by predicted sentiment chart.
-- Average confidence by sentiment chart.
-- Low-confidence prediction monitoring.
-- Suspicious prediction samples.
-- Latest enriched streaming events table.
-- Sidebar filters by sentiment, score, batch ID, and ProductId.
-- ProductId filter supports both typing a ProductId manually and selecting from available ProductIds.
-- Dedicated ProductId requirement section for `B001E4KFG0`.
-- Context-aware ProductId metrics:
-  - For one prediction, the dashboard shows exact event details such as review score, true label, predicted label, confidence, review date, source split, and batch ID.
-  - For multiple predictions, the dashboard shows aggregate product-level metrics.
-- Configurable latest-record limit.
-- Auto-refresh with configurable interval.
-- PDF report export from current dashboard data and filters.
-
----
-
-## 16. PDF Report Export
-
-The dashboard can generate a PDF report from the current MongoDB data and active filters.
-
-Report includes:
-
-- Pipeline overview.
-- Active filters.
-- Executive summary.
+- Predicted sentiment filter.
+- Score filter.
+- Batch ID filter.
+- Professional ProductId filter:
+  - type ProductId manually,
+  - or select ProductId from available values.
 - Sentiment distribution.
+- Confidence distribution.
+- Records per micro-batch.
+- Batch summary table.
 - Amazon score distribution.
-- Average confidence by sentiment.
 - Score by predicted sentiment.
 - Prediction results by review date.
-- ProductId `B001E4KFG0` sentiment summary.
-- ProductId `B001E4KFG0` score distribution.
-- Streaming batch summary.
-- Low-confidence prediction samples.
-- Latest prediction samples.
-
-Generated reports are local artifacts and should not be committed unless explicitly needed for a presentation.
+- Streaming source split distribution.
+- Dedicated ProductId analysis for `B001E4KFG0`.
+- Context-aware ProductId metrics:
+  - if one review exists, show exact event values,
+  - if multiple reviews exist, show aggregate product metrics.
+- Model confidence by class.
+- Risk monitoring:
+  - predictions below 60% confidence,
+  - suspicious score/sentiment combinations.
+- Latest streaming events table.
+- PDF report export.
 
 ---
 
-## 17. Screenshots
+## 15. Airflow Orchestration
 
-Recommended screenshots to keep in the portfolio README:
+Airflow is included as an optional orchestration layer for the batch side of the project.
 
-| Screenshot | Purpose |
+Airflow folder:
+
+```text
+airflow/
+```
+
+Main DAG:
+
+```text
+airflow/dags/amazon_reviews_batch_pipeline.py
+```
+
+DAG name:
+
+```text
+amazon_reviews_batch_orchestration
+```
+
+### 15.1 What Airflow Orchestrates
+
+```text
+start_batch_orchestration
+→ check_project_structure
+→ check_raw_dataset_exists
+→ export_test_split_for_streaming
+→ validate_streaming_export
+→ train_spark_model
+→ validate_saved_model
+→ print_next_runtime_commands
+→ end_batch_orchestration
+```
+
+### 15.2 What Airflow Does Not Orchestrate
+
+Airflow does not run the infinite streaming services directly:
+
+```text
+bd-kafka
+bd-spark
+bd-producer
+bd-streamlit
+```
+
+Those commands remain runtime services.
+
+This separation is intentional:
+
+| Layer | Tool |
 |---|---|
-| `docs/screenshots/01_project_structure.png` | Shows clean project organization |
-| `docs/screenshots/02_docker_services_running.png` | Proves Kafka, Zookeeper, and MongoDB are running |
-| `docs/screenshots/03_full_training_metrics.png` | Shows final full-data model metrics |
-| `docs/screenshots/04_spark_streaming_to_mongodb.png` | Proves Spark is loading the model and writing micro-batches to MongoDB |
-| `docs/screenshots/05_producer_streaming_reviews.png` | Shows producer sending review events to Kafka |
-| `docs/screenshots/06_mongodb_latest_predictions.png` | Shows stored prediction documents in MongoDB |
-| `docs/screenshots/13_dashboard_overview_kpis.png` | Shows global dashboard KPIs |
-| `docs/screenshots/14_dashboard_prediction_results_by_date.png` | Shows prediction results by review date |
-| `docs/screenshots/15_dashboard_productid_filter.png` | Shows ProductId filter |
-| `docs/screenshots/16_dashboard_productid_b001e4kfg0_analysis.png` | Shows required ProductId analysis |
-| `docs/screenshots/17_dashboard_enriched_latest_events.png` | Shows enriched latest events table |
-| `docs/screenshots/18_dashboard_pdf_report_export.png` | Shows PDF report export section |
+| Batch preparation | Airflow |
+| Message streaming | Kafka |
+| Real-time inference | Spark Structured Streaming |
+| Storage | MongoDB |
+| Dashboard | Streamlit |
 
-### Dashboard Overview
+### 15.3 Airflow Setup
 
-![Dashboard overview KPIs](docs/screenshots/13_dashboard_overview_kpis.png)
+From the project root:
 
-### Prediction Results by Review Date
+```bash
+chmod +x airflow/scripts/*.sh
+./airflow/scripts/setup_airflow.sh
+```
 
-![Prediction results by review date](docs/screenshots/14_dashboard_prediction_results_by_date.png)
+Start Airflow:
 
-### ProductId Filtering
+```bash
+./airflow/scripts/start_airflow.sh
+```
 
-![ProductId filter](docs/screenshots/15_dashboard_productid_filter.png)
+Open:
 
-### Required ProductId Analysis
+```text
+http://localhost:8080
+```
 
-![Required ProductId analysis](docs/screenshots/16_dashboard_productid_b001e4kfg0_analysis.png)
+Default local login:
 
-### Latest Enriched Streaming Events
+```text
+username: admin
+password: admin
+```
 
-![Latest enriched streaming events](docs/screenshots/17_dashboard_enriched_latest_events.png)
+Stop Airflow:
 
-### PDF Report Export
+```bash
+./airflow/scripts/stop_airflow.sh
+```
 
-![PDF report export](docs/screenshots/18_dashboard_pdf_report_export.png)
+Test DAG import:
 
-### Training Metrics
+```bash
+./airflow/scripts/test_dag.sh
+```
 
-![Full-data model training metrics](docs/screenshots/03_full_training_metrics.png)
+Expected result:
 
-### Spark Streaming to MongoDB
+```text
+DAG test passed.
+```
 
-![Spark streaming to MongoDB](docs/screenshots/04_spark_streaming_to_mongodb.png)
+Note: local Airflow may show warnings about SQLite and SequentialExecutor. These warnings are acceptable for local development and portfolio demonstration. A production Airflow deployment should use PostgreSQL or MySQL as metadata DB and a production executor.
 
 ---
 
-## 18. How to Run
+## 16. Screenshots
 
-The project uses WSL/Linux commands. If aliases are configured, use the short commands. Otherwise, use the manual commands.
+Recommended screenshots to keep in `docs/screenshots/`.
 
-### 18.1 Activate Environment
+### 16.1 Core Pipeline Screenshots
 
-Recommended project shortcut:
+| File | Purpose |
+|---|---|
+| `01_project_structure.png` | Shows clean project structure |
+| `02_docker_services_running.png` | Shows Kafka, Zookeeper, and MongoDB running |
+| `03_full_training_metrics.png` | Shows training, validation, and test metrics |
+| `04_spark_streaming_to_mongodb.png` | Shows Spark streaming batches inserted into MongoDB |
+| `05_producer_streaming_reviews.png` | Shows Kafka producer sending reviews |
+| `06_mongodb_latest_predictions.png` | Shows MongoDB stored predictions |
+
+### 16.2 Dashboard Screenshots
+
+| File | Purpose |
+|---|---|
+| `13_dashboard_overview_kpis.png` | Shows dashboard KPIs and prediction summary |
+| `14_dashboard_prediction_results_by_date.png` | Shows prediction results by review date |
+| `15_dashboard_productid_filter.png` | Shows ProductId filter |
+| `16_dashboard_productid_b001e4kfg0_analysis.png` | Shows required ProductId analysis |
+| `17_dashboard_enriched_latest_events.png` | Shows metadata-preserving latest events table |
+| `18_dashboard_pdf_report_export.png` | Shows PDF report export section |
+
+### 16.3 Airflow Screenshots
+
+| File | Purpose |
+|---|---|
+| `19_airflow_login_page.png` | Shows Airflow UI available locally |
+| `20_airflow_dag_list_detected.png` | Shows DAG detected by Airflow |
+| `21_airflow_dag_graph_view.png` | Shows DAG task structure |
+| `22_airflow_dag_run_progress.png` | Shows DAG execution in progress |
+| `23_airflow_dag_success_run.png` | Shows all DAG tasks completed successfully |
+
+---
+
+## 17. How to Run
+
+The project uses short aliases stored in the WSL shell configuration.
+
+### 17.1 Enter Project Environment
 
 ```bash
 bigdata
 ```
 
-Manual equivalent:
+Expected:
 
-```bash
-cd "/mnt/c/Users/Me/Desktop/END TO END DATA ENGINEERING PROJECTS/BIG DATA PROJECT"
-source .venv/bin/activate
-export PYTHONPATH=$PWD
+```text
+(.venv) youssef@Youssef:/mnt/c/Users/Me/Desktop/END TO END DATA ENGINEERING PROJECTS/BIG DATA PROJECT$
 ```
 
----
+### 17.2 Start Docker Services
 
-### 18.2 Start Kafka, Zookeeper, and MongoDB
-
-Shortcut:
+Terminal 1:
 
 ```bash
 bd-kafka
 ```
 
-Manual equivalent:
+This starts Kafka, Zookeeper, and MongoDB.
+
+### 17.3 Export Test Split
+
+```bash
+bd-test-export
+```
+
+This creates:
+
+```text
+data/processed/test_reviews.jsonl
+```
+
+### 17.4 Run Spark Streaming
+
+Terminal 2:
+
+```bash
+bd-spark
+```
+
+Expected logs:
+
+```text
+LOADING SAVED PIPELINE MODEL
+READING FROM KAFKA
+STREAMING PREDICTIONS TO MONGODB STARTED
+Batch X: inserted Y documents into MongoDB.
+```
+
+### 17.5 Run Producer
+
+Terminal 3:
+
+```bash
+bd-producer
+```
+
+Expected logs:
+
+```text
+Sent row 1/56814 | product_id=B001E4KFG0 | review_date=2011-04-27 | score=5 | label=positive | source_split=product_demo
+```
+
+### 17.6 Run Dashboard
+
+Terminal 4:
+
+```bash
+bd-streamlit
+```
+
+Then open the Streamlit URL shown in the terminal.
+
+### 17.7 Run Airflow
+
+```bash
+./airflow/scripts/start_airflow.sh
+```
+
+Open:
+
+```text
+http://localhost:8080
+```
+
+Run the DAG manually:
+
+```text
+amazon_reviews_batch_orchestration
+```
+
+---
+
+## 18. Validation Commands
+
+### 18.1 Docker Services
 
 ```bash
 cd kafka
-docker compose up -d
 docker compose ps
-cd ..
 ```
 
 Expected services:
@@ -856,301 +899,159 @@ zookeeper
 mongodb
 ```
 
----
-
-### 18.3 Train the Spark ML Model
-
-Shortcut:
-
-```bash
-bd-train
-```
-
-Manual equivalent:
-
-```bash
-spark-submit src/spark/training/train_spark_pipeline.py
-```
-
-Cleaner metrics output:
-
-```bash
-spark-submit src/spark/training/train_spark_pipeline.py 2>/dev/null | grep -A 20 -E "==========|Accuracy|Macro F1|Positive F1|Negative F1|Neutral F1|Model saved"
-```
-
-The trained model is saved to:
-
-```text
-src/spark/model/sentiment_pipeline_model
-```
-
----
-
-### 18.4 Export Test Split for Streaming
-
-Shortcut:
-
-```bash
-bd-test-export
-```
-
-Manual equivalent:
-
-```bash
-spark-submit src/spark/training/export_test_split_for_streaming.py
-```
-
-The producer streams from:
-
-```text
-data/processed/test_reviews.jsonl
-```
-
----
-
-### 18.5 Start Spark Streaming Prediction
-
-Shortcut:
-
-```bash
-bd-spark
-```
-
-Manual equivalent:
-
-```bash
-spark-submit \
-  --packages org.apache.spark:spark-sql-kafka-0-10_2.12:3.2.4 \
-  src/spark/streaming/predict_stream.py
-```
-
-Expected output:
-
-```text
-========== LOADING SAVED PIPELINE MODEL ==========
-========== LABEL INDEX MAPPING ==========
-0.0 -> positive
-1.0 -> negative
-2.0 -> neutral
-========== READING FROM KAFKA ==========
-========== STREAMING PREDICTIONS TO MONGODB STARTED ==========
-Batch X: inserted Y documents into MongoDB.
-```
-
----
-
-### 18.6 Start Kafka Producer
-
-Shortcut:
-
-```bash
-bd-producer
-```
-
-Manual equivalent:
-
-```bash
-python src/ingestion/producer.py
-```
-
-Expected output:
-
-```text
-========== PRODUCER STARTED ==========
-Sent row 1/56814 | product_id=B001E4KFG0 | review_date=2011-04-27 | score=5 | label=positive | source_split=product_demo | text=...
-```
-
----
-
-### 18.7 Start Streamlit Dashboard
-
-Shortcut:
-
-```bash
-bd-streamlit
-```
-
-Manual equivalent:
-
-```bash
-python -m streamlit run src/dashboard/app.py
-```
-
-Open:
-
-```text
-http://localhost:8501
-```
-
----
-
-## 19. MongoDB Validation Commands
-
-Open MongoDB shell:
+### 18.2 MongoDB Count
 
 ```bash
 bd-mongo
 ```
 
-Manual equivalent:
-
-```bash
-docker exec -it mongodb mongosh
-```
-
-Use the project database:
+Inside `mongosh`:
 
 ```javascript
 use amazon_reviews_db
-```
 
-Count Spark streaming predictions:
-
-```javascript
 db.sentiment_predictions.countDocuments({
   source: "spark_structured_streaming"
 })
 ```
 
-Show latest enriched predictions:
+### 18.3 Latest Predictions
 
 ```javascript
-db.sentiment_predictions.find({
-  source: "spark_structured_streaming"
-}, {
-  _id: 0,
-  product_id: 1,
-  review_date: 1,
-  text_preview: 1,
-  score: 1,
-  true_label: 1,
-  predicted_label: 1,
-  probability: 1,
-  source_split: 1,
-  batch_id: 1,
-  processed_at: 1
-}).sort({
-  processed_at: -1
-}).limit(5).pretty()
+db.sentiment_predictions.find(
+  { source: "spark_structured_streaming" },
+  {
+    _id: 0,
+    product_id: 1,
+    review_date: 1,
+    score: 1,
+    true_label: 1,
+    predicted_label: 1,
+    source_split: 1,
+    batch_id: 1
+  }
+).sort({ processed_at: -1 }).limit(5).pretty()
 ```
 
-Show sentiment distribution:
+### 18.4 Required ProductId Validation
 
 ```javascript
-db.sentiment_predictions.aggregate([
-  { $match: { source: "spark_structured_streaming" } },
-  { $group: { _id: "$predicted_label", count: { $sum: 1 } } },
-  { $sort: { count: -1 } }
-])
+db.sentiment_predictions.find(
+  { product_id: "B001E4KFG0" },
+  {
+    _id: 0,
+    product_id: 1,
+    review_date: 1,
+    score: 1,
+    true_label: 1,
+    predicted_label: 1,
+    source_split: 1,
+    batch_id: 1
+  }
+).pretty()
 ```
 
-Verify required ProductId:
+Expected:
 
-```javascript
-db.sentiment_predictions.find({
-  product_id: "B001E4KFG0"
-}, {
-  _id: 0,
-  product_id: 1,
-  review_date: 1,
-  score: 1,
-  true_label: 1,
-  predicted_label: 1,
-  source_split: 1,
-  batch_id: 1
-}).pretty()
+```text
+product_id: B001E4KFG0
+review_date: 2011-04-27
+score: 5
+true_label: positive
+predicted_label: positive
+source_split: product_demo
 ```
 
-Delete old streaming predictions before a clean run:
+### 18.5 Airflow DAG Validation
 
-```javascript
-db.sentiment_predictions.deleteMany({
-  source: "spark_structured_streaming"
-})
+```bash
+./airflow/scripts/test_dag.sh
+```
+
+Expected:
+
+```text
+DAG test passed.
 ```
 
 ---
 
-## 20. Git and Artifact Rules
+## 19. Git and Artifact Rules
 
-Do not commit local data, generated models, environments, database backups, or generated reports unless explicitly needed.
+Do not commit local data or generated heavy artifacts.
 
-Recommended `.gitignore` entries:
+Recommended `.gitignore` coverage:
 
 ```gitignore
-# Data
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+env/
+
+# Raw and processed data
 data/raw/
 data/processed/
-*.csv
-*.jsonl
 
-# Spark generated artifacts
+# Spark generated folders
 src/spark/model/
 src/spark/models/
 spark-warehouse/
 metastore_db/
 
-# MongoDB exports/backups
+# Airflow runtime
+airflow/airflow_home/
+airflow/logs/
+*.pid
+
+# Exports and backups
 exports/
 backups/
-
-# Python
-.venv/
-venv/
-env/
-big_data_env/
-__pycache__/
-*.pyc
-
-# OS / IDE
-.DS_Store
-.vscode/
-.idea/
 ```
 
-The repository should contain:
+Commit source code, documentation, configuration, and screenshots:
 
-```text
-source code
-configuration files
-README and documentation
-small tuning result files
-selected screenshots
-```
-
-The repository should not contain:
-
-```text
-raw dataset
-processed streaming data
-saved Spark model
-virtual environment
-MongoDB data volume
-large exports or backups
+```bash
+git add README.md src/ kafka/ airflow/ docs/screenshots/ results/ requirements.txt .gitignore
+git commit -m "Finalize Big Data streaming pipeline with Airflow orchestration"
+git push origin main
 ```
 
 ---
 
-## 21. Future Improvements
+## 20. Future Improvements
 
-Planned improvements:
+Planned future improvements:
 
-- Add a Flask or Django web dashboard to align more directly with the web technology options mentioned in the project brief.
-- Add Spark ML model comparison beyond Logistic Regression, such as Naive Bayes and One-vs-Rest Linear SVC, using the same split and metrics.
-- Dockerize the Streamlit dashboard.
-- Add Airflow orchestration for batch training and export steps.
-- Add model versioning.
-- Add structured logging instead of terminal-only logs.
-- Add tests for MongoDB writer and dashboard data transformations.
-- Add Kafka consumer lag monitoring.
-- Add Docker health checks.
-- Add CI checks for formatting and imports.
-- Add dashboard deployment instructions.
+1. Add a Flask or Django web dashboard for closer alignment with the professor’s suggested web technologies.
+2. Add model comparison with multiple Spark ML models:
+   - Logistic Regression,
+   - Naive Bayes,
+   - One-vs-Rest Linear SVC if practical.
+3. Add automated data quality checks with Great Expectations or custom Spark checks.
+4. Add MongoDB indexes for faster ProductId and date queries.
+5. Add Dockerized Airflow using PostgreSQL metadata DB.
+6. Add CI checks for Python formatting and import validation.
+7. Add dashboard authentication for production use.
+8. Add model drift monitoring and periodic retraining strategy.
 
 ---
 
-## 22. Portfolio Summary
+## Final Notes
 
-This project demonstrates an end-to-end Big Data pipeline using Kafka, Spark Structured Streaming, Spark MLlib, MongoDB, Docker, and Streamlit. It includes batch model training, real-time inference, NoSQL storage, dashboard analytics, ProductId-level monitoring, prediction-by-date analysis, and PDF reporting.
+This project demonstrates the repeated professional Big Data pattern:
 
-The final implementation is suitable as a portfolio project for data engineering and big data engineering roles because it demonstrates the full path from raw dataset to streaming prediction and business-facing analytics.
+```text
+Data Source
+→ Ingestion
+→ Message Broker
+→ Distributed Processing
+→ Machine Learning Inference
+→ Storage
+→ Dashboard
+→ Orchestration
+→ Documentation
+```
+
+The most important learning outcome is not only the Amazon Reviews use case, but the repeatable architecture pattern that can be reused across future Big Data projects.
