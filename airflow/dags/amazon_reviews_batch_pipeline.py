@@ -118,7 +118,7 @@ with DAG(
         {DEFAULT_BASH_PREFIX}
 
         echo "Exporting test split for streaming..."
-        {PYTHON_BIN} src/spark/training/export_test_split_for_streaming.py
+        "{PYTHON_BIN}" src/spark/training/export_test_split_for_streaming.py
         """,
         execution_timeout=timedelta(minutes=45),
     )
@@ -157,7 +157,7 @@ with DAG(
         {DEFAULT_BASH_PREFIX}
 
         echo "Training Spark ML model..."
-        {SPARK_SUBMIT_BIN} src/spark/training/train_spark_pipeline.py
+        "{SPARK_SUBMIT_BIN}" src/spark/training/train_spark_pipeline.py
         """,
         execution_timeout=timedelta(hours=2),
     )
