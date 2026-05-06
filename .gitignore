@@ -3,10 +3,11 @@
 # ============================================================
 
 # ----------------------------
-# Raw datasets / local data
+# Raw/processed datasets / local data
 # ----------------------------
 data/raw/Reviews.csv
 data/raw/*.csv
+data/processed/
 
 # Optional local database/export snapshots
 exports/mongodb/
