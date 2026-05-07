@@ -218,9 +218,6 @@ checks → export → validation → training → model validation.
 └── src/
     ├── __init__.py
     │
-    ├── dashboard/
-    │   └── app.py
-    │
     ├── experiments/
     │   ├── preprocessing/
     │   └── training/
@@ -1044,9 +1041,7 @@ spark-submit src/spark/training/tune_spark_pipeline_sa.py
 ### Verify Kafka topic
 
 ```bash
-docker exec -it kafka kafka-topics.sh \
-  --bootstrap-server localhost:9092 \
-  --list
+docker exec -it kafka kafka-topics.sh   --bootstrap-server localhost:9092   --list
 ```
 
 ### Airflow DAG check
