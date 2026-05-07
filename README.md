@@ -633,8 +633,6 @@ The final dashboard is implemented with Flask, HTML, CSS, and JavaScript.
 | `src/web/static/js/` | Dashboard interactivity and chart rendering |
 | `scripts/run_web_dashboard.sh` | Helper script to launch the dashboard |
 
-The Flask dashboard replaced the earlier Streamlit prototype because the project requirements mention Django/Flask/JavaScript for the web interface and because Flask gives more control over layout, API design, report export, and professional dashboard behavior.
-
 ---
 
 ## 16. Flask API Endpoints
@@ -1108,10 +1106,6 @@ Spark Structured Streaming applies the saved model to new Kafka events in micro-
 ### MongoDB for prediction storage
 
 MongoDB stores flexible prediction documents containing text metadata, product information, model outputs, confidence metadata, and timestamps. This makes it practical for dashboard queries and evolving schema requirements.
-
-### Flask over Streamlit for the final interface
-
-Streamlit was useful for prototyping, but the final project uses Flask/JavaScript to match the project requirement and provide a more professional, controllable web interface.
 
 ### Majority Vote Ensemble for batch evaluation
 
