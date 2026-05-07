@@ -853,10 +853,6 @@ The final project uses the Flask / JavaScript dashboard screenshots below.
 
 ![Flask Dashboard Overview](docs/screenshots/flask_dashboard_overview.png)
 
-### Dashboard Overview with Main Analytics
-
-![Flask Dashboard Overview with Main Analytics](docs/screenshots/flask_dashboard_overview_with_main_analytics.png)
-
 ### Main Analytics and Review Date Analysis
 
 ![Flask Main Analytics](docs/screenshots/flask_main_analytics_and_review_date.png)
