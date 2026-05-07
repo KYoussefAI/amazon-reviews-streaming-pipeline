@@ -1,6 +1,6 @@
 # Spark Model Comparison Results
 
-Generated at: `2026-05-06T23:45:19`
+Generated at: `2026-05-07T07:38:28`
 
 ## Selection Rule
 
@@ -14,27 +14,27 @@ The test split is used only once for the model selected by validation Macro F1.
 
 | Rank | Model | Accuracy | Macro F1 | Positive F1 | Negative F1 | Neutral F1 | Saveable Pipeline | Supports Probability | Selected |
 |---:|---|---:|---:|---:|---:|---:|:---:|:---:|:---:|
-| 1 | majority_vote_ensemble | 0.8563 | 0.6997 | 0.9241 | 0.7304 | 0.4446 | False | False | True |
-| 2 | one_vs_rest_linear_svc | 0.8818 | 0.6925 | 0.9387 | 0.7302 | 0.4088 | True | False | False |
-| 3 | logistic_regression | 0.8111 | 0.6718 | 0.8948 | 0.7002 | 0.4204 | True | True | False |
-| 4 | naive_bayes | 0.7759 | 0.6210 | 0.8778 | 0.6327 | 0.3525 | True | True | False |
-| 5 | random_forest_light | 0.7818 | 0.2956 | 0.8774 | 0.0094 | 0.0000 | True | True | False |
+| 1 | majority_vote_ensemble | 0.8569 | 0.7003 | 0.9244 | 0.7318 | 0.4449 | False | False | True |
+| 2 | one_vs_rest_linear_svc | 0.8818 | 0.6921 | 0.9389 | 0.7313 | 0.4061 | True | False | False |
+| 3 | logistic_regression | 0.8121 | 0.6728 | 0.8954 | 0.7015 | 0.4214 | True | True | False |
+| 4 | naive_bayes | 0.7761 | 0.6212 | 0.8780 | 0.6329 | 0.3527 | True | True | False |
+| 5 | random_forest_light | 0.7816 | 0.2948 | 0.8773 | 0.0070 | 0.0000 | True | True | False |
 
 ## Selected Model
 
 Selected model: `majority_vote_ensemble`
 
-Validation Macro F1: `0.6997`
+Validation Macro F1: `0.7003`
 
 ## Final Test Metrics for Selected Model
 
 | Metric | Value |
 |---|---:|
-| Accuracy | 0.8573 |
-| Macro F1 | 0.7010 |
-| Positive F1 | 0.9253 |
-| Negative F1 | 0.7308 |
-| Neutral F1 | 0.4469 |
+| Accuracy | 0.8579 |
+| Macro F1 | 0.7023 |
+| Positive F1 | 0.9256 |
+| Negative F1 | 0.7330 |
+| Neutral F1 | 0.4482 |
 
 ## Model Notes
 

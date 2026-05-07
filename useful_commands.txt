@@ -1,87 +1,302 @@
-# BIG DATA PROJECT — SHORT COMMANDS
+# BIG DATA PROJECT — USEFUL COMMANDS
+# Amazon Reviews Real-Time Sentiment Analysis Pipeline
+# Environment: WSL / Linux
 
 ============================================================
 1) DAILY PROJECT START
 ============================================================
 
+# Jump to project root and activate virtual environment
 bigdata
 
+# Manual equivalent
+cd "/mnt/c/Users/Me/Desktop/END TO END DATA ENGINEERING PROJECTS/BIG DATA PROJECT"
+source .venv/bin/activate
 
-============================================================
-2) RUN FULL STREAMING PIPELINE
-============================================================
-
-# Terminal 1 — Kafka/MongoDB
-bd-kafka
-
-# Terminal 2 — Spark Streaming to MongoDB
-bd-spark
-
-# Terminal 3 — Test-set Producer
-bd-producer
-
-# Terminal 4 — Streamlit Dashboard
-bd-streamlit
+# Quick project status
+pwd
+git status
+tree -L 3 -I "__pycache__|*.pyc|.venv|venv|env|big_data_env|data|spark-warehouse|metastore_db|exports|backups"
 
 
 ============================================================
-3) EXPORT TEST SPLIT FOR STREAMING
+2) START INFRASTRUCTURE: KAFKA + ZOOKEEPER + MONGODB
 ============================================================
 
-bd-test-export
+cd kafka
+docker compose up -d
+docker compose ps
+cd ..
+
+# Expected services:
+# - kafka-kafka-1
+# - kafka-zookeeper-1
+# - mongodb
 
 
 ============================================================
-4) MONGODB QUICK CHECKS
+3) VERIFY KAFKA TOPIC
 ============================================================
 
-bd-mongo
+docker exec -it kafka kafka-topics.sh \
+  --bootstrap-server localhost:9092 \
+  --list
+
+docker exec -it kafka kafka-topics.sh \
+  --bootstrap-server localhost:9092 \
+  --describe \
+  --topic amazon_reviews
+
+
+============================================================
+4) BATCH PREPARATION AND MODEL TRAINING
+============================================================
+
+# Export held-out test split for online streaming simulation
+python src/spark/training/export_test_split_for_streaming.py
+
+# Train Spark ML models and compare candidates
+spark-submit src/spark/training/train_spark_pipeline.py
+
+# Cleaner training output
+spark-submit src/spark/training/train_spark_pipeline.py 2>/dev/null \
+  | grep -E "==========|Accuracy|Macro F1|Positive F1|Negative F1|Neutral F1|Model saved|Selected model"
+
+# Optional: simulated annealing tuning
+spark-submit src/spark/training/tune_spark_pipeline_sa.py
+
+
+============================================================
+5) RUN ONLINE STREAMING PIPELINE
+============================================================
+
+# Terminal 1 — infrastructure
+cd kafka
+docker compose up -d
+docker compose ps
+cd ..
+
+# Terminal 2 — Spark Structured Streaming
+# Reads Kafka, loads one_vs_rest_linear_svc, writes predictions to MongoDB
+spark-submit src/spark/streaming/predict_stream.py
+
+# Terminal 3 — Kafka producer
+# Sends test reviews one by one to topic amazon_reviews
+python src/ingestion/producer.py
+
+# Terminal 4 — Flask / JavaScript web dashboard
+python src/web/app.py
+
+# Open in browser:
+# http://localhost:5000
+
+
+============================================================
+6) RUN FLASK DASHBOARD WITH SCRIPT
+============================================================
+
+chmod +x scripts/run_web_dashboard.sh
+./scripts/run_web_dashboard.sh
+
+
+============================================================
+7) MONGODB QUICK CHECKS
+============================================================
+
+docker exec -it mongodb mongosh
 
 use amazon_reviews_db
 
-db.sentiment_predictions.countDocuments({ source: "spark_structured_streaming" })
-
-db.sentiment_predictions.find({
+# Total persisted Spark streaming predictions
+db.sentiment_predictions.countDocuments({
   source: "spark_structured_streaming"
-}).sort({
-  processed_at: -1
-}).limit(5).pretty()
+})
 
+# Latest prediction documents
+db.sentiment_predictions.find(
+  { source: "spark_structured_streaming" },
+  {
+    _id: 0,
+    schema_version: 1,
+    product_id: 1,
+    review_date: 1,
+    score: 1,
+    true_label: 1,
+    predicted_label: 1,
+    model_type: 1,
+    confidence: 1,
+    confidence_available: 1,
+    source_split: 1,
+    batch_id: 1,
+    processed_at: 1
+  }
+).sort({ processed_at: -1 }).limit(5).pretty()
+
+# Sentiment distribution
 db.sentiment_predictions.aggregate([
   { $match: { source: "spark_structured_streaming" } },
   { $group: { _id: "$predicted_label", count: { $sum: 1 } } },
   { $sort: { count: -1 } }
 ])
 
-db.sentiment_predictions.deleteMany({ source: "spark_structured_streaming" })
+# Model distribution
+db.sentiment_predictions.aggregate([
+  { $match: { source: "spark_structured_streaming" } },
+  { $group: { _id: "$model_type", count: { $sum: 1 } } },
+  { $sort: { count: -1 } }
+])
+
+# ProductId required by project PDF
+db.sentiment_predictions.find(
+  { product_id: "B001E4KFG0" },
+  {
+    _id: 0,
+    product_id: 1,
+    review_date: 1,
+    score: 1,
+    true_label: 1,
+    predicted_label: 1,
+    model_type: 1,
+    confidence: 1,
+    source_split: 1,
+    batch_id: 1
+  }
+).sort({ processed_at: -1 }).pretty()
+
+# Clear only Spark streaming prediction records if you need a clean run
+db.sentiment_predictions.deleteMany({
+  source: "spark_structured_streaming"
+})
 
 
 ============================================================
-5) TRAINING / TUNING
+8) AIRFLOW BATCH ORCHESTRATION
 ============================================================
 
-bd-train
+# Test DAG import
+./airflow/scripts/test_dag.sh
 
-bd-tune
+# Start Airflow standalone UI
+airflow standalone
+
+# Open:
+# http://localhost:8080
+
+# DAG name:
+# amazon_reviews_batch_orchestration
+
+# Airflow orchestrates bounded batch tasks:
+# - project checks
+# - raw dataset validation
+# - test split export
+# - streaming export validation
+# - Spark model training
+# - saved model validation
+# - next runtime command printing
+
+# Airflow does NOT run long-living services:
+# - Kafka
+# - Spark Structured Streaming
+# - MongoDB
+# - Flask dashboard
 
 
 ============================================================
-6) STATUS CHECK
+9) API CHECKS FOR FLASK DASHBOARD
 ============================================================
 
-bd-status
+curl http://localhost:5000/api/health
+curl http://localhost:5000/api/summary
+curl http://localhost:5000/api/options
+curl http://localhost:5000/api/charts
+curl http://localhost:5000/api/risk
+curl http://localhost:5000/api/latest
+curl http://localhost:5000/api/product/B001E4KFG0
+
+# Download PDF report manually
+curl -o exports/reports/dashboard_report.pdf http://localhost:5000/api/report.pdf
 
 
 ============================================================
-7) GIT
+10) CHECK GENERATED RESULTS
 ============================================================
 
-bigdata
+ls -lh results
+
+cat results/model_comparison_results.md
+cat results/spark_sa_tuning_results.md
+
+ls -lh docs/screenshots
+
+
+============================================================
+11) CHECK PROJECT STRUCTURE
+============================================================
+
+tree -L 4 -I "__pycache__|*.pyc|.venv|venv|env|big_data_env|data|spark-warehouse|metastore_db|exports|backups"
+
+
+============================================================
+12) COMMON STREAMING FIXES
+============================================================
+
+# If Spark says checkpoint offsets do not match the current query,
+# stop the streaming job and remove old checkpoint folders.
+
+find . -type d -iname "*checkpoint*"
+
+# Example cleanup if a local checkpoint folder exists:
+rm -rf checkpoints/
+rm -rf spark-checkpoints/
+rm -rf tmp/checkpoints/
+
+# Then restart:
+spark-submit src/spark/streaming/predict_stream.py
+
+
+============================================================
+13) GIT WORKFLOW
+============================================================
 
 git status
 
+git add README.md structure.txt useful_commands.txt docs/screenshots src web airflow results scripts requirements.txt .gitignore
+
+# Safer broad add after checking .gitignore:
 git add .
 
-git commit -m "Complete Phase 10 dashboard and test-set streaming"
+git commit -m "Finalize Flask dashboard documentation and project commands"
 
 git push origin main
+
+
+============================================================
+14) FINAL PORTFOLIO RUN ORDER
+============================================================
+
+# 1. Start infrastructure
+cd kafka
+docker compose up -d
+docker compose ps
+cd ..
+
+# 2. Export test split
+python src/spark/training/export_test_split_for_streaming.py
+
+# 3. Train / validate models
+spark-submit src/spark/training/train_spark_pipeline.py
+
+# 4. Start Spark streaming
+spark-submit src/spark/streaming/predict_stream.py
+
+# 5. Start producer in another terminal
+python src/ingestion/producer.py
+
+# 6. Start dashboard in another terminal
+python src/web/app.py
+
+# 7. Open dashboard
+# http://localhost:5000
+
+# 8. Check MongoDB
+docker exec -it mongodb mongosh
