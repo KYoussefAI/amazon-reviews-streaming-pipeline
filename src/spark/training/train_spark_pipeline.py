@@ -13,6 +13,8 @@ from pyspark.ml.feature import (
 )
 from pyspark.ml.classification import LogisticRegression
 
+from src.spark.training.text_normalization import add_lemmatized_text_column
+
 
 DATA_PATH = "data/raw/Reviews.csv"
 MODEL_OUTPUT_PATH = "src/spark/model/sentiment_pipeline_model"
@@ -61,6 +63,7 @@ def add_label_column(df):
     )
 
     df = df.withColumnRenamed("Text", "text")
+    df = add_lemmatized_text_column(df)
 
     return df.select("text", "Score", "label")
 

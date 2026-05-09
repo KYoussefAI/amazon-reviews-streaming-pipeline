@@ -22,10 +22,19 @@ if PROJECT_ROOT not in sys.path:
 
 
 from src.storage.mongodb_writer import write_predictions_to_mongodb
+from src.spark.training.text_normalization import add_lemmatized_text_column
 
 
-KAFKA_BOOTSTRAP_SERVERS = "localhost:9092"
-KAFKA_TOPIC = "amazon_reviews"
+KAFKA_BOOTSTRAP_SERVERS = os.environ.get(
+    "KAFKA_BOOTSTRAP_SERVERS",
+    "localhost:9092,localhost:9093,localhost:9094",
+)
+KAFKA_TOPIC = os.environ.get("KAFKA_TOPIC", "amazon_reviews")
+KAFKA_STARTING_OFFSETS = os.environ.get("KAFKA_STARTING_OFFSETS", "latest")
+KAFKA_MAX_OFFSETS_PER_TRIGGER = os.environ.get("KAFKA_MAX_OFFSETS_PER_TRIGGER")
+ENABLE_STREAMING_LEMMATIZATION = (
+    os.environ.get("ENABLE_STREAMING_LEMMATIZATION", "0") == "1"
+)
 
 # Best single saveable model from validation-based comparison.
 # The ensemble had the best overall Macro F1, but it is heavier for streaming.
@@ -165,6 +174,14 @@ def build_prediction_input(parsed_df, labels):
     """
 
     prediction_input_df = parsed_df.withColumn(
+        "raw_text",
+        F.col("text")
+    )
+
+    if ENABLE_STREAMING_LEMMATIZATION:
+        prediction_input_df = add_lemmatized_text_column(prediction_input_df)
+
+    prediction_input_df = prediction_input_df.withColumn(
         "label",
         F.when(
             F.col("label").isin(labels),
@@ -216,8 +233,8 @@ def build_output_dataframe(predictions, labels):
         "review_date",
         "score",
         "summary",
-        F.substring("text", 1, 120).alias("text_preview"),
-        "text",
+        F.substring("raw_text", 1, 120).alias("text_preview"),
+        F.col("raw_text").alias("text"),
         "true_label",
         "source_split",
         "source_row_index",
@@ -244,12 +261,20 @@ def main():
 
     print("========== READING FROM KAFKA ==========")
 
-    kafka_df = spark.readStream \
+    kafka_reader = spark.readStream \
         .format("kafka") \
         .option("kafka.bootstrap.servers", KAFKA_BOOTSTRAP_SERVERS) \
         .option("subscribe", KAFKA_TOPIC) \
-        .option("startingOffsets", "latest") \
-        .load()
+        .option("startingOffsets", KAFKA_STARTING_OFFSETS) \
+        .option("failOnDataLoss", "false")
+
+    if KAFKA_MAX_OFFSETS_PER_TRIGGER:
+        kafka_reader = kafka_reader.option(
+            "maxOffsetsPerTrigger",
+            KAFKA_MAX_OFFSETS_PER_TRIGGER,
+        )
+
+    kafka_df = kafka_reader.load()
 
     parsed_df = parse_kafka_messages(
         kafka_df=kafka_df,

@@ -1,5 +1,6 @@
 from kafka import KafkaProducer
 import json
+import os
 import time
 import pandas as pd
 
@@ -7,9 +8,12 @@ import pandas as pd
 STREAM_DATA_PATH = "data/processed/test_reviews.jsonl"
 
 KAFKA_TOPIC = "amazon_reviews"
-KAFKA_BOOTSTRAP_SERVERS = "localhost:9092"
+KAFKA_BOOTSTRAP_SERVERS = os.environ.get(
+    "KAFKA_BOOTSTRAP_SERVERS",
+    "localhost:9092,localhost:9093,localhost:9094",
+)
 
-SLEEP_SECONDS = 0.05
+SLEEP_SECONDS = float(os.environ.get("PRODUCER_SLEEP_SECONDS", "0.2"))
 START_ROW = 0
 
 REQUIRED_COLUMNS = [
@@ -148,7 +152,8 @@ def main():
                 f"text={message['text'][:80]}..."
             )
 
-            time.sleep(SLEEP_SECONDS)
+            if SLEEP_SECONDS > 0:
+                time.sleep(SLEEP_SECONDS)
 
     except KeyboardInterrupt:
         print("Producer stopped manually.")

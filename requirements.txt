@@ -9,3 +9,5 @@ streamlit
 streamlit-autorefresh
 plotly
 reportlab
+jupyter
+notebook

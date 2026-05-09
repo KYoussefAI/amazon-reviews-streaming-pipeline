@@ -310,6 +310,10 @@ This rule is used consistently across batch training, validation, testing, strea
 
 The Spark ML feature engineering pipeline converts raw text reviews into numerical features.
 
+### Lemmatization
+
+Before Spark ML tokenization, the production training code normalizes review text with WordNet lemmatization through `src/spark/training/text_normalization.py`. The same normalization is applied in Spark Structured Streaming before loading the saved model, while MongoDB still stores the original review text for dashboard inspection.
+
 ### Tokenization
 
 `RegexTokenizer` splits the review text into lowercase words and removes punctuation patterns.
@@ -497,9 +501,17 @@ Kafka acts as the streaming message broker between the producer and Spark Struct
 
 | Component | Role |
 |---|---|
-| `kafka/docker-compose.yml` | Starts Kafka, Zookeeper, and MongoDB |
+| `kafka/docker-compose.yml` | Starts three Kafka brokers, Zookeeper, and MongoDB |
 | Kafka topic | `amazon_reviews` |
 | `src/ingestion/producer.py` | Reads exported test reviews and sends events to Kafka |
+
+The local stack uses three brokers to match a production-style architecture:
+
+```text
+localhost:9092,localhost:9093,localhost:9094
+```
+
+The topic should be created with replication factor `3`, `6` partitions, and `min.insync.replicas=2`. See `kafka/topics.md` for the exact command.
 
 The producer reads from:
 
@@ -853,6 +865,7 @@ cd amazon-reviews-streaming-pipeline
 python -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
+python -m nltk.downloader wordnet stopwords
 ```
 
 ### Dataset setup
@@ -863,6 +876,16 @@ Download the Amazon Fine Food Reviews dataset from Kaggle and place the CSV file
 data/raw/Reviews.csv
 ```
 
+### Optional exploratory notebook
+
+Use Jupyter only for pre-pipeline exploration:
+
+```bash
+jupyter notebook notebooks/exploratory_data_analysis.ipynb
+```
+
+The notebook inspects the dataset, label distribution, and train/validation/test split before the production Spark pipeline runs.
+
 ### Step 1 — Start Kafka, Zookeeper, and MongoDB
 
 ```bash
@@ -870,6 +893,19 @@ cd kafka
 docker compose up -d
 docker compose ps
 cd ..
+```
+
+Create or verify the replicated topic:
+
+```bash
+docker exec -it kafka1 kafka-topics.sh \
+  --bootstrap-server kafka1:29092,kafka2:29093,kafka3:29094 \
+  --create \
+  --if-not-exists \
+  --topic amazon_reviews \
+  --partitions 6 \
+  --replication-factor 3 \
+  --config min.insync.replicas=2
 ```
 
 ### Step 2 — Run model comparison
@@ -906,7 +942,7 @@ spark-submit src/spark/streaming/predict_stream.py
 If the streaming code was changed and an old checkpoint causes a source mismatch, clear the old checkpoint before restarting:
 
 ```bash
-rm -rf data/processed/checkpoints/spark_streaming_predictions
+rm -rf data/processed/checkpoints/spark_streaming_best_single_model
 spark-submit src/spark/streaming/predict_stream.py
 ```
 
@@ -1041,7 +1077,10 @@ spark-submit src/spark/training/tune_spark_pipeline_sa.py
 ### Verify Kafka topic
 
 ```bash
-docker exec -it kafka kafka-topics.sh   --bootstrap-server localhost:9092   --list
+docker exec -it kafka1 kafka-topics.sh \
+  --bootstrap-server kafka1:29092,kafka2:29093,kafka3:29094 \
+  --describe \
+  --topic amazon_reviews
 ```
 
 ### Airflow DAG check

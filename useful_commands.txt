@@ -12,6 +12,7 @@ bigdata
 # Manual equivalent
 cd "/mnt/c/Users/Me/Desktop/END TO END DATA ENGINEERING PROJECTS/BIG DATA PROJECT"
 source .venv/bin/activate
+python -m nltk.downloader wordnet stopwords
 
 # Quick project status
 pwd
@@ -23,14 +24,13 @@ tree -L 3 -I "__pycache__|*.pyc|.venv|venv|env|big_data_env|data|spark-warehouse
 2) START INFRASTRUCTURE: KAFKA + ZOOKEEPER + MONGODB
 ============================================================
 
-cd kafka
-docker compose up -d
-docker compose ps
-cd ..
+bd-kafka
 
 # Expected services:
-# - kafka-kafka-1
-# - kafka-zookeeper-1
+# - kafka1
+# - kafka2
+# - kafka3
+# - zookeeper
 # - mongodb
 
 
@@ -38,12 +38,21 @@ cd ..
 3) VERIFY KAFKA TOPIC
 ============================================================
 
-docker exec -it kafka kafka-topics.sh \
-  --bootstrap-server localhost:9092 \
+docker exec -it kafka1 kafka-topics.sh \
+  --bootstrap-server kafka1:29092,kafka2:29093,kafka3:29094 \
+  --create \
+  --if-not-exists \
+  --topic amazon_reviews \
+  --partitions 6 \
+  --replication-factor 3 \
+  --config min.insync.replicas=2
+
+docker exec -it kafka1 kafka-topics.sh \
+  --bootstrap-server kafka1:29092,kafka2:29093,kafka3:29094 \
   --list
 
-docker exec -it kafka kafka-topics.sh \
-  --bootstrap-server localhost:9092 \
+docker exec -it kafka1 kafka-topics.sh \
+  --bootstrap-server kafka1:29092,kafka2:29093,kafka3:29094 \
   --describe \
   --topic amazon_reviews
 
@@ -51,6 +60,9 @@ docker exec -it kafka kafka-topics.sh \
 ============================================================
 4) BATCH PREPARATION AND MODEL TRAINING
 ============================================================
+
+# Optional Jupyter-only EDA before production Spark pipeline
+jupyter notebook notebooks/exploratory_data_analysis.ipynb
 
 # Export held-out test split for online streaming simulation
 python src/spark/training/export_test_split_for_streaming.py
@@ -70,25 +82,43 @@ spark-submit src/spark/training/tune_spark_pipeline_sa.py
 5) RUN ONLINE STREAMING PIPELINE
 ============================================================
 
+# Optional reset before a clean replay from the beginning.
+# Stop Spark and producer first, then run:
+bd-reset
+
 # Terminal 1 — infrastructure
-cd kafka
-docker compose up -d
-docker compose ps
-cd ..
+bd-kafka
 
 # Terminal 2 — Spark Structured Streaming
 # Reads Kafka, loads one_vs_rest_linear_svc, writes predictions to MongoDB
-spark-submit src/spark/streaming/predict_stream.py
+bd-spark
 
 # Terminal 3 — Kafka producer
 # Sends test reviews one by one to topic amazon_reviews
-python src/ingestion/producer.py
+bd-producer
 
 # Terminal 4 — Flask / JavaScript web dashboard
 python src/web/app.py
 
 # Open in browser:
 # http://localhost:5000
+
+
+============================================================
+5B) CLICKABLE BASH PIPELINE LAUNCHERS
+============================================================
+
+# Offline training and streaming export
+./bash_pipelines/01_offline_training.sh
+
+# Kafka + MongoDB + Spark Structured Streaming
+./bash_pipelines/02_online_streaming.sh
+
+# Producer in background + live Flask dashboard
+./bash_pipelines/03_live_dashboard_while_streaming.sh
+
+# Airflow scheduler + webserver
+./bash_pipelines/04_airflow_system.sh
 
 
 ============================================================
@@ -245,13 +275,11 @@ tree -L 4 -I "__pycache__|*.pyc|.venv|venv|env|big_data_env|data|spark-warehouse
 
 find . -type d -iname "*checkpoint*"
 
-# Example cleanup if a local checkpoint folder exists:
-rm -rf checkpoints/
-rm -rf spark-checkpoints/
-rm -rf tmp/checkpoints/
+# Standard project reset:
+bd-reset
 
 # Then restart:
-spark-submit src/spark/streaming/predict_stream.py
+bd-spark
 
 
 ============================================================
@@ -275,24 +303,34 @@ git push origin main
 ============================================================
 
 # 1. Start infrastructure
-cd kafka
-docker compose up -d
-docker compose ps
-cd ..
+bd-kafka
 
-# 2. Export test split
+# 1b. Create replicated Kafka topic
+docker exec -it kafka1 kafka-topics.sh \
+  --bootstrap-server kafka1:29092,kafka2:29093,kafka3:29094 \
+  --create \
+  --if-not-exists \
+  --topic amazon_reviews \
+  --partitions 6 \
+  --replication-factor 3 \
+  --config min.insync.replicas=2
+
+# 2. Optional notebook-only EDA
+jupyter notebook notebooks/exploratory_data_analysis.ipynb
+
+# 3. Export test split
 python src/spark/training/export_test_split_for_streaming.py
 
-# 3. Train / validate models
+# 4. Train / validate models
 spark-submit src/spark/training/train_spark_pipeline.py
 
-# 4. Start Spark streaming
-spark-submit src/spark/streaming/predict_stream.py
+# 5. Start Spark streaming
+bd-spark
 
-# 5. Start producer in another terminal
-python src/ingestion/producer.py
+# 6. Start producer in another terminal
+bd-producer
 
-# 6. Start dashboard in another terminal
+# 7. Start dashboard in another terminal
 python src/web/app.py
 
 # 7. Open dashboard
