@@ -76,3 +76,6 @@ Thumbs.db
 .vscode/
 .idea/
 docs/PHASE5.md
+scripts/generate_project_handbook.py
+docs/amazon_reviews_full_project_handbook.pdf
+docs/amazon_reviews_full_project_handbook.md
