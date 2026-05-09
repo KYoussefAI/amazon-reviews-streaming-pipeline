@@ -7,7 +7,7 @@ import pandas as pd
 
 STREAM_DATA_PATH = "data/processed/test_reviews.jsonl"
 
-KAFKA_TOPIC = "amazon_reviews"
+KAFKA_TOPIC = os.environ.get("KAFKA_TOPIC", "amazon_reviews")
 KAFKA_BOOTSTRAP_SERVERS = os.environ.get(
     "KAFKA_BOOTSTRAP_SERVERS",
     "localhost:9092,localhost:9093,localhost:9094",

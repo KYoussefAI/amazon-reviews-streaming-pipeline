@@ -1,141 +1,111 @@
 .
 ├── README.md
-├── airflow
-│   ├── README_AIRFLOW.md
-│   ├── airflow_home
-│   │   ├── airflow-webserver.pid
-│   │   ├── airflow.cfg
-│   │   ├── airflow.db
-│   │   ├── logs
-│   │   │   ├── dag_id=amazon_reviews_batch_orchestration
-│   │   │   ├── dag_processor_manager
-│   │   │   ├── scheduler
-│   │   │   └── scheduler.log
-│   │   ├── scheduler.pid
-│   │   └── webserver_config.py
-│   ├── dags
-│   │   ├── __pycache__
-│   │   │   └── amazon_reviews_batch_pipeline.cpython-310.pyc
-│   │   └── amazon_reviews_batch_pipeline.py
-│   ├── requirements-airflow.txt
-│   └── scripts
-│       ├── setup_airflow.sh
-│       ├── start_airflow.sh
-│       ├── stop_airflow.sh
-│       └── test_dag.sh
-├── backups
-│   └── mongodb
-├── data
-│   ├── processed
-│   │   ├── checkpoints
-│   │   │   ├── spark_streaming_best_single_model
-│   │   │   └── spark_streaming_predictions
-│   │   ├── test_reviews.csv
-│   │   ├── test_reviews.jsonl
-│   │   ├── test_reviews_stream
-│   │   │   ├── _SUCCESS
-│   │   │   └── part-00000-bb74d20d-3464-4d3e-9782-9ceecf357eb4-c000.csv
-│   │   └── test_reviews_stream_json
-│   │       ├── _SUCCESS
-│   │       └── part-00000-48369b01-12f2-4af7-824f-a87f7cc8f8f5-c000.json
-│   └── raw
-│       └── Reviews.csv
-├── docs
-│   ├── PHASE5.md
-│   ├── amazon_reviews_sentiment_report_2026-05-02_18-56-28.pdf
-│   ├── screenshots
-│   │   ├── 02_docker_services_running.png
-│   │   ├── 19_airflow_login_page.png
-│   │   ├── 20_airflow_dag_list_detected.png
-│   │   ├── 21_airflow_dag_graph_view.png
-│   │   ├── 22_airflow_dag_run_progress.png
-│   │   ├── 23_airflow_dag_success_run.png
-│   │   ├── flask_dashboard_overview.png
-│   │   ├── flask_latest_prediction_events.png
-│   │   ├── flask_main_analytics_and_review_date.png
-│   │   ├── flask_model_quality.png
-│   │   ├── flask_required_product_analysis.png
-│   │   ├── flask_risk_monitoring.png
-│   │   ├── flask_streaming_operations.png
-│   │   ├── terminal_kafka_producer_final.png
-│   │   ├── terminal_model_comparison_final.png.png
-│   │   ├── terminal_mongodb_final_schema.png
-│   │   └── terminal_spark_streaming_final_model.png
-│   └── spark_sentiment_tuning_report.md
-├── exports
-│   └── mongodb
-├── kafka
-│   ├── docker-compose.yml
-│   └── topics.md
-├── project_context.md
 ├── requirements.txt
-├── results
-│   ├── final_full_data_metrics.txt
-│   ├── model_comparison_results.csv
-│   ├── model_comparison_results.md
-│   ├── spark_sa_tuning_results.csv
-│   └── spark_sa_tuning_results.md
-├── scripts
-│   └── run_web_dashboard.sh
-├── src
-│   ├── __init__.py
-│   ├── __pycache__
-│   │   ├── __init__.cpython-310.pyc
-│   │   └── __init__.cpython-312.pyc
-│   ├── experiments
-│   │   ├── __init__.py
-│   │   ├── preprocessing
-│   │   │   ├── __init__.py
-│   │   │   ├── __pycache__
-│   │   │   ├── clean.py
-│   │   │   ├── dataset.py
-│   │   │   ├── label.py
-│   │   │   ├── resampling.py
-│   │   │   └── vectorizer.py
-│   │   └── training
-│   │       ├── __init__.py
-│   │       ├── __pycache__
-│   │       └── train.py
-│   ├── ingestion
-│   │   ├── __init__.py
-│   │   └── producer.py
-│   ├── spark
-│   │   ├── model
-│   │   │   ├── ensemble_models
-│   │   │   └── sentiment_pipeline_model
-│   │   ├── models
-│   │   │   └── __init__.py
-│   │   ├── streaming
-│   │   │   ├── __init__.py
-│   │   │   ├── consumer.py
-│   │   │   └── predict_stream.py
-│   │   └── training
-│   │       ├── __init__.py
-│   │       ├── __pycache__
-│   │       ├── compare_spark_models.py
-│   │       ├── export_test_split_for_streaming.py
-│   │       ├── models
-│   │       ├── train_ensemble_models.py
-│   │       ├── train_spark_pipeline.py
-│   │       └── tune_spark_pipeline_sa.py
-│   ├── storage
-│   │   ├── __init__.py
-│   │   ├── __pycache__
-│   │   │   ├── __init__.cpython-310.pyc
-│   │   │   └── mongodb_writer.cpython-310.pyc
-│   │   ├── mongodb_writer.py
-│   │   └── test_mongodb_connection.py
-│   └── web
-│       ├── README_WEB.md
-│       ├── __init__.py
-│       ├── app.py
-│       ├── requirements-web.txt
-│       ├── static
-│       │   ├── css
-│       │   └── js
-│       └── templates
-│           └── dashboard.html
+├── project_context.md
 ├── structure.txt
-└── useful_commands.txt
-
-51 directories, 88 files
+├── useful_commands.txt
+│
+├── airflow/
+│   ├── README_AIRFLOW.md
+│   ├── requirements-airflow.txt
+│   ├── airflow_home/
+│   ├── dags/
+│   │   └── amazon_reviews_batch_pipeline.py
+│   └── scripts/
+│       ├── setup_airflow.sh
+│       ├── start_airflow.sh
+│       ├── stop_airflow.sh
+│       └── test_dag.sh
+│
+├── data/
+│   ├── raw/
+│   │   └── Reviews.csv
+│   └── processed/
+│       ├── checkpoints/
+│       ├── test_reviews.csv
+│       ├── test_reviews.jsonl
+│       ├── test_reviews_stream/
+│       └── test_reviews_stream_json/
+│
+├── docs/
+│   ├── amazon_reviews_sentiment_report_2026-05-02_18-56-28.pdf
+│   ├── spark_sentiment_tuning_report.md
+│   └── screenshots/
+│       ├── flask_dashboard_overview.png
+│       ├── flask_latest_prediction_events.png
+│       ├── flask_main_analytics_and_review_date.png
+│       ├── flask_model_quality.png
+│       ├── flask_required_product_analysis.png
+│       ├── flask_risk_monitoring.png
+│       ├── flask_streaming_operations.png
+│       ├── terminal_kafka_producer_final.png
+│       ├── terminal_model_comparison_final.png.png
+│       ├── terminal_mongodb_final_schema.png
+│       └── terminal_spark_streaming_final_model.png
+│
+├── exports/
+│   └── mongodb/
+│
+├── kafka/
+│   ├── docker-compose.yml
+│   └── topics.md
+│
+├── notebooks/
+│   └── exploratory_data_analysis.ipynb
+│
+├── results/
+│   ├── final_full_data_metrics.txt
+│   ├── model_comparison_results.csv
+│   ├── model_comparison_results.md
+│   ├── spark_sa_tuning_results.csv
+│   └── spark_sa_tuning_results.md
+│
+├── scripts/
+│   └── run_web_dashboard.sh
+│
+└── src/
+    ├── __init__.py
+    ├── experiments/
+    │   ├── preprocessing/
+    │   │   ├── clean.py
+    │   │   ├── dataset.py
+    │   │   ├── label.py
+    │   │   ├── resampling.py
+    │   │   └── vectorizer.py
+    │   └── training/
+    │       └── train.py
+    ├── ingestion/
+    │   └── producer.py
+    ├── spark/
+    │   ├── model/
+    │   │   ├── ensemble_models/
+    │   │   └── sentiment_pipeline_model/
+    │   ├── streaming/
+    │   │   ├── consumer.py
+    │   │   └── predict_stream.py
+    │   └── training/
+    │       ├── compare_spark_models.py
+    │       ├── export_test_split_for_streaming.py
+    │       ├── text_normalization.py
+    │       ├── train_ensemble_models.py
+    │       ├── train_spark_pipeline.py
+    │       ├── tune_spark_pipeline_sa.py
+    │       └── models/
+    │           ├── feature_pipeline.py
+    │           ├── linear_svc_ovr_model.py
+    │           ├── logistic_regression_model.py
+    │           ├── majority_vote_ensemble.py
+    │           ├── naive_bayes_model.py
+    │           └── random_forest_model.py
+    ├── storage/
+    │   ├── mongodb_writer.py
+    │   └── test_mongodb_connection.py
+    └── web/
+        ├── README_WEB.md
+        ├── app.py
+        ├── requirements-web.txt
+        ├── static/
+        │   ├── css/
+        │   └── js/
+        └── templates/
+            └── dashboard.html

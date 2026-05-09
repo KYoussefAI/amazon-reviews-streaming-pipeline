@@ -312,7 +312,7 @@ The Spark ML feature engineering pipeline converts raw text reviews into numeric
 
 ### Lemmatization
 
-Before Spark ML tokenization, the production training code normalizes review text with WordNet lemmatization through `src/spark/training/text_normalization.py`. The same normalization is applied in Spark Structured Streaming before loading the saved model, while MongoDB still stores the original review text for dashboard inspection.
+Before Spark ML tokenization, the production training code normalizes review text with WordNet lemmatization through `src/spark/training/text_normalization.py`. The streaming job keeps the saved model's normal inference path by default and can enable the same normalization with `ENABLE_STREAMING_LEMMATIZATION=1` when using a model trained with lemmatized text. MongoDB stores the original review text for dashboard inspection.
 
 ### Tokenization
 
@@ -898,14 +898,20 @@ cd ..
 Create or verify the replicated topic:
 
 ```bash
-docker exec -it kafka1 kafka-topics.sh \
+docker exec -it kafka1 kafka-topics \
   --bootstrap-server kafka1:29092,kafka2:29093,kafka3:29094 \
   --create \
   --if-not-exists \
   --topic amazon_reviews \
   --partitions 6 \
-  --replication-factor 3 \
-  --config min.insync.replicas=2
+  --replication-factor 3
+
+docker exec -it kafka1 kafka-configs \
+  --bootstrap-server kafka1:29092,kafka2:29093,kafka3:29094 \
+  --entity-type topics \
+  --entity-name amazon_reviews \
+  --alter \
+  --add-config min.insync.replicas=2
 ```
 
 ### Step 2 — Run model comparison
@@ -936,14 +942,18 @@ data/processed/test_reviews.jsonl
 ### Step 4 — Start Spark Structured Streaming
 
 ```bash
-spark-submit src/spark/streaming/predict_stream.py
+spark-submit \
+  --packages org.apache.spark:spark-sql-kafka-0-10_2.12:3.2.4 \
+  src/spark/streaming/predict_stream.py
 ```
 
 If the streaming code was changed and an old checkpoint causes a source mismatch, clear the old checkpoint before restarting:
 
 ```bash
 rm -rf data/processed/checkpoints/spark_streaming_best_single_model
-spark-submit src/spark/streaming/predict_stream.py
+spark-submit \
+  --packages org.apache.spark:spark-sql-kafka-0-10_2.12:3.2.4 \
+  src/spark/streaming/predict_stream.py
 ```
 
 ### Step 5 — Start the Kafka producer in another terminal
@@ -1077,7 +1087,7 @@ spark-submit src/spark/training/tune_spark_pipeline_sa.py
 ### Verify Kafka topic
 
 ```bash
-docker exec -it kafka1 kafka-topics.sh \
+docker exec -it kafka1 kafka-topics \
   --bootstrap-server kafka1:29092,kafka2:29093,kafka3:29094 \
   --describe \
   --topic amazon_reviews
