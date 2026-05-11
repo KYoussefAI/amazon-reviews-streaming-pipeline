@@ -3,6 +3,9 @@ const REQUIRED_PRODUCT_ID = config.requiredProductId || "B001E4KFG0";
 const SOURCE_NAME = config.sourceName || "spark_structured_streaming";
 
 let refreshTimer = null;
+let refreshInFlight = false;
+let refreshQueued = false;
+let filterRefreshTimer = null;
 
 const colorMap = {
     positive: "var(--positive)",
@@ -13,6 +16,8 @@ const colorMap = {
     logistic_regression: "var(--positive)",
     naive_bayes: "var(--neutral)",
     majority_vote_ensemble: "var(--purple)",
+    available: "var(--positive)",
+    not_available: "var(--unknown)",
 };
 
 function formatNumber(value) {
@@ -23,6 +28,11 @@ function formatNumber(value) {
 function formatPercent(value) {
     if (value === null || value === undefined) return "N/A";
     return `${(Number(value) * 100).toFixed(1)}%`;
+}
+
+function formatDecimal(value, digits = 2) {
+    if (value === null || value === undefined || Number.isNaN(Number(value))) return "N/A";
+    return Number(value).toFixed(digits);
 }
 
 function getActiveProductId() {
@@ -196,6 +206,24 @@ function renderDateChart(containerId, rows, valueKey = "total") {
     }).join("");
 }
 
+function renderAccuracyDateChart(rows) {
+    const container = document.getElementById("accuracyDateChart");
+    if (!container) return;
+
+    if (!rows || rows.length === 0) {
+        container.innerHTML = `<div class="empty-state">No labeled date accuracy data available</div>`;
+        return;
+    }
+
+    container.innerHTML = rows.map(row => {
+        const accuracy = Number(row.accuracy) || 0;
+        const height = Math.max(accuracy * 245, accuracy > 0 ? 2 : 0);
+        const title = `${row.review_date}: ${(accuracy * 100).toFixed(1)}% accuracy from ${row.total} records`;
+
+        return `<div class="date-bar accuracy-bar" title="${title}" style="height:${height}px;"></div>`;
+    }).join("");
+}
+
 function renderBatchSummary(rows) {
     const container = document.getElementById("batchSummary");
     if (!container) return;
@@ -256,6 +284,120 @@ function renderConfusionMatrix(rows) {
 
     html += `</div>`;
     container.innerHTML = html;
+}
+
+function renderAlignmentCards(rows) {
+    const container = document.getElementById("alignmentCards");
+    if (!container) return;
+
+    if (!rows || rows.length === 0) {
+        container.innerHTML = `<div class="empty-state">No score/sentiment alignment data available</div>`;
+        return;
+    }
+
+    container.innerHTML = rows.map(row => {
+        const total = Number(row.total) || 0;
+        const aligned = Number(row.aligned) || 0;
+        const suspicious = Number(row.suspicious) || 0;
+        const alignedRate = total ? aligned / total : 0;
+        const suspiciousRate = total ? suspicious / total : 0;
+
+        return `
+            <div class="alignment-card">
+                <div class="alignment-head">
+                    <strong>Score ${row.score}</strong>
+                    <span>${formatNumber(total)} reviews</span>
+                </div>
+                <div class="alignment-meter">
+                    <div class="alignment-good" style="width:${alignedRate * 100}%"></div>
+                    <div class="alignment-alert" style="width:${suspiciousRate * 100}%"></div>
+                </div>
+                <div class="alignment-meta">
+                    <span>${formatPercent(alignedRate)} aligned</span>
+                    <span>${formatPercent(suspiciousRate)} alert</span>
+                </div>
+            </div>
+        `;
+    }).join("");
+}
+
+function renderTopProducts(rows) {
+    const container = document.getElementById("topProducts");
+    if (!container) return;
+
+    if (!rows || rows.length === 0) {
+        container.innerHTML = `<div class="empty-state">No ProductId activity available</div>`;
+        return;
+    }
+
+    const maxTotal = Math.max(...rows.map(row => Number(row.total) || 0), 1);
+
+    container.innerHTML = rows.map((row, index) => {
+        const total = Number(row.total) || 0;
+        const positive = Number(row.positive) || 0;
+        const negative = Number(row.negative) || 0;
+        const neutral = Number(row.neutral) || 0;
+        const unknown = Number(row.unknown) || 0;
+        const width = Math.max((total / maxTotal) * 100, total > 0 ? 2 : 0);
+
+        return `
+            <div class="product-rank-row">
+                <div class="rank-index">${index + 1}</div>
+                <div>
+                    <div class="rank-title">
+                        <strong>${row.product_id}</strong>
+                        ${badge(row.dominant_label)}
+                    </div>
+                    <div class="rank-meter" title="${formatNumber(total)} predictions">
+                        <div class="rank-fill" style="width:${width}%"></div>
+                    </div>
+                    <div class="rank-stack">
+                        <span class="stack-positive" style="width:${total ? (positive / total) * 100 : 0}%"></span>
+                        <span class="stack-negative" style="width:${total ? (negative / total) * 100 : 0}%"></span>
+                        <span class="stack-neutral" style="width:${total ? (neutral / total) * 100 : 0}%"></span>
+                        <span class="stack-unknown" style="width:${total ? (unknown / total) * 100 : 0}%"></span>
+                    </div>
+                </div>
+                <div class="rank-stat">
+                    <strong>${formatNumber(total)}</strong>
+                    <span>avg score ${formatDecimal(row.average_score, 2)}</span>
+                </div>
+            </div>
+        `;
+    }).join("");
+}
+
+function renderProductScoreGrid(rows) {
+    const container = document.getElementById("productScoreGrid");
+    if (!container) return;
+
+    if (!rows || rows.length === 0) {
+        container.innerHTML = `<div class="empty-state">No product score grid available</div>`;
+        return;
+    }
+
+    const maxCell = Math.max(
+        ...rows.flatMap(row => Object.values(row.scores || {}).map(value => Number(value) || 0)),
+        1
+    );
+
+    container.innerHTML = `
+        <div class="score-grid-header">
+            <span>ProductId</span>
+            ${[1, 2, 3, 4, 5].map(score => `<span>${score}</span>`).join("")}
+        </div>
+        ${rows.map(row => `
+            <div class="score-grid-row">
+                <strong title="${row.product_id}">${row.product_id}</strong>
+                ${[1, 2, 3, 4, 5].map(score => {
+                    const value = Number((row.scores || {})[String(score)]) || 0;
+                    const intensity = value / maxCell;
+                    const alpha = 0.08 + (intensity * 0.62);
+                    return `<span class="score-cell" title="Score ${score}: ${value}" style="background:rgba(56, 189, 248, ${alpha});">${formatNumber(value)}</span>`;
+                }).join("")}
+            </div>
+        `).join("")}
+    `;
 }
 
 function renderProductAnalysis(data) {
@@ -423,6 +565,12 @@ async function loadOptions() {
 }
 
 async function refreshDashboard() {
+    if (refreshInFlight) {
+        refreshQueued = true;
+        return;
+    }
+
+    refreshInFlight = true;
     const queryString = buildQueryString();
 
     try {
@@ -439,12 +587,15 @@ async function refreshDashboard() {
         setText("totalPredictions", formatNumber(summary.total_predictions));
         setText("latestBatchId", summary.latest_batch_id ?? "N/A");
         setText("streamedAccuracy", summary.streamed_accuracy_display);
-        setText("averageConfidence", summary.average_confidence_display);
+        setText(
+            "averageConfidence",
+            summary.confidence_available_count > 0 ? summary.average_confidence_display : "Not emitted"
+        );
         setText("positivePredictions", formatNumber(summary.positive_predictions));
         setText("negativePredictions", formatNumber(summary.negative_predictions));
         setText("neutralPredictions", formatNumber(summary.neutral_predictions));
         setText("confidenceCoverage", formatPercent(summary.confidence_coverage));
-        setText("lowConfidenceCount", formatNumber(summary.low_confidence_count));
+        setText("lowConfidenceCount", formatNumber(summary.suspicious_count));
         setText("labeledSamples", formatNumber(summary.streamed_labeled_total));
         setText("latestProcessedAt", summary.latest_processed_at || "N/A");
 
@@ -457,24 +608,15 @@ async function refreshDashboard() {
         renderDateChart("batchChart", charts.batch_records || [], "records");
         renderBatchSummary(charts.batch_records || []);
 
-        renderConfidenceBars("confidenceBars", charts.confidence_distribution || []);
-        renderBars(
-            "confidenceByLabelBars",
-            (charts.confidence_by_label || []).map(row => ({
-                label: row.label,
-                count: row.average_confidence === null ? 0 : row.average_confidence * 100,
-            })),
-            { color: "var(--accent-2)" }
-        );
-        renderBars(
-            "confidenceByModelBars",
-            (charts.confidence_by_model || []).map(row => ({
-                label: row.label,
-                count: row.average_confidence === null ? 0 : row.average_confidence * 100,
-            })),
-            { color: "var(--purple)" }
-        );
+        renderConfidenceBars("confidenceBars", [
+            { label: "available", count: summary.confidence_available_count || 0 },
+            { label: "not_available", count: summary.confidence_missing_count || 0 },
+        ]);
+        renderAlignmentCards(charts.score_sentiment_alignment || []);
         renderConfusionMatrix(charts.confusion_matrix || []);
+        renderAccuracyDateChart(charts.accuracy_by_date || []);
+        renderTopProducts(charts.top_products || []);
+        renderProductScoreGrid(charts.product_score_grid || []);
 
         renderProductAnalysis(product);
         renderLatestTable(latest);
@@ -488,7 +630,22 @@ async function refreshDashboard() {
         console.error(error);
         setText("mongodbStatus", "Error");
         setText("lastRefresh", `Error: ${error.message}`);
+    } finally {
+        refreshInFlight = false;
+
+        if (refreshQueued) {
+            refreshQueued = false;
+            refreshDashboard();
+        }
     }
+}
+
+function scheduleRefreshDashboard() {
+    if (filterRefreshTimer) {
+        clearTimeout(filterRefreshTimer);
+    }
+
+    filterRefreshTimer = setTimeout(refreshDashboard, 300);
 }
 
 function setupAutoRefresh() {
@@ -519,8 +676,8 @@ function setupEventListeners() {
         "limitFilter",
     ].forEach(id => {
         const element = document.getElementById(id);
-        element.addEventListener("change", refreshDashboard);
-        element.addEventListener("input", refreshDashboard);
+        element.addEventListener("change", scheduleRefreshDashboard);
+        element.addEventListener("input", scheduleRefreshDashboard);
     });
 
     document.getElementById("refreshButton").addEventListener("click", refreshDashboard);

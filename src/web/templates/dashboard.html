@@ -29,6 +29,7 @@
             <nav class="nav">
                 <a href="#overview">Overview</a>
                 <a href="#analytics">Analytics</a>
+                <a href="#product-score">Products</a>
                 <a href="#quality">Quality</a>
                 <a href="#operations">Operations</a>
                 <a href="#product">ProductId</a>
@@ -127,8 +128,8 @@
                     <p class="eyebrow">Professional Flask / JavaScript Web Interface</p>
                     <h1>Amazon Reviews Sentiment Intelligence Platform</h1>
                     <p>
-                        Offline analytics web dashboard powered by MongoDB prediction results from
-                        Kafka and Spark Structured Streaming.
+                        Live product, score, and sentiment analysis powered by MongoDB prediction results from
+                        Kafka, Spark Structured Streaming, and the LinearSVC sentiment model.
                     </p>
                 </div>
 
@@ -190,19 +191,19 @@
                     </article>
 
                     <article class="metric-card">
-                        <span>Average Confidence</span>
+                        <span>SVC Probability Status</span>
                         <strong id="averageConfidence">N/A</strong>
                     </article>
                 </div>
 
                 <div class="metric-grid grid-4">
                     <article class="metric-card">
-                        <span>Confidence Coverage</span>
+                        <span>Probability Coverage</span>
                         <strong id="confidenceCoverage">N/A</strong>
                     </article>
 
                     <article class="metric-card">
-                        <span>Low Confidence</span>
+                        <span>Score/Sentiment Alerts</span>
                         <strong id="lowConfidenceCount">0</strong>
                     </article>
 
@@ -267,20 +268,20 @@
                 <div class="section-title">
                     <div>
                         <h2>Model Quality Analytics</h2>
-                        <p>Confidence, agreement, and confusion matrix using streamed labeled data.</p>
+                        <p>Evaluation from true labels, prediction labels, and score/sentiment consistency.</p>
                     </div>
                 </div>
 
                 <div class="grid-2">
                     <article class="chart-card">
-                        <h3>Confidence Distribution</h3>
+                        <h3>SVC Probability Availability</h3>
                         <div id="confidenceBars" class="bar-chart"></div>
-                        <p class="chart-note">For LinearSVC, confidence can be N/A because the model does not output calibrated probabilities.</p>
+                        <p class="chart-note">LinearSVC does not output calibrated probabilities in this pipeline, so confidence is intentionally N/A.</p>
                     </article>
 
                     <article class="chart-card">
-                        <h3>Average Confidence by Sentiment</h3>
-                        <div id="confidenceByLabelBars" class="bar-chart"></div>
+                        <h3>Score/Sentiment Alignment</h3>
+                        <div id="alignmentCards" class="alignment-grid"></div>
                     </article>
                 </div>
 
@@ -291,8 +292,29 @@
                     </article>
 
                     <article class="chart-card">
-                        <h3>Average Confidence by Model</h3>
-                        <div id="confidenceByModelBars" class="bar-chart"></div>
+                        <h3>Accuracy by Review Date</h3>
+                        <div id="accuracyDateChart" class="date-chart"></div>
+                    </article>
+                </div>
+            </section>
+
+            <section id="product-score" class="section">
+                <div class="section-title">
+                    <div>
+                        <h2>Product & Score Intelligence</h2>
+                        <p>ProductId activity, dominant sentiment, review score shape, and high-signal product clusters.</p>
+                    </div>
+                </div>
+
+                <div class="grid-2">
+                    <article class="chart-card">
+                        <h3>Most Active ProductIds</h3>
+                        <div id="topProducts" class="product-rank"></div>
+                    </article>
+
+                    <article class="chart-card">
+                        <h3>Product Score Heatmap</h3>
+                        <div id="productScoreGrid" class="score-grid"></div>
                     </article>
                 </div>
             </section>
@@ -335,7 +357,7 @@
                 <div class="section-title">
                     <div>
                         <h2>Risk Monitoring</h2>
-                        <p>Low-confidence predictions and suspicious score/sentiment combinations.</p>
+                        <p>Suspicious score/sentiment combinations and samples worth inspecting manually.</p>
                     </div>
                 </div>
 
@@ -360,7 +382,7 @@
                     </article>
 
                     <article class="chart-card">
-                        <h3>Low Confidence Samples</h3>
+                        <h3>Unavailable Probability Samples</h3>
                         <div class="table-wrapper compact">
                             <table>
                                 <thead>
