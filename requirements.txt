@@ -9,5 +9,6 @@ streamlit
 streamlit-autorefresh
 plotly
 reportlab
+Pillow
 jupyter
 notebook
