@@ -1,18 +1,15 @@
-import os
 from datetime import datetime, timezone
 
 from pymongo import MongoClient
 
 
-MONGO_URI = os.environ.get("MONGO_URI", "mongodb://localhost:27017")
-DATABASE_NAME = os.environ.get("MONGO_DATABASE", "amazon_reviews_db")
-COLLECTION_NAME = os.environ.get("MONGO_COLLECTION", "sentiment_predictions")
-MONGO_INSERT_CHUNK_SIZE = int(os.environ.get("MONGO_INSERT_CHUNK_SIZE", "1000"))
+MONGO_URI = "mongodb://localhost:27017"
+DATABASE_NAME = "amazon_reviews_db"
+COLLECTION_NAME = "sentiment_predictions"
 
 DEFAULT_SOURCE = "spark_structured_streaming"
 DEFAULT_MODEL_TYPE = "unknown"
 DOCUMENT_SCHEMA_VERSION = "v2"
-INDEXES_CREATED = False
 
 
 def get_mongo_collection():
@@ -263,62 +260,46 @@ def create_indexes(collection):
     collection.create_index([("source", 1), ("processed_at", -1)])
 
 
-def create_indexes_once(collection):
-    global INDEXES_CREATED
+def write_predictions_to_mongodb(batch_df, batch_id):
+    rows = batch_df.collect()
 
-    if INDEXES_CREATED:
+    if not rows:
+        print(f"Batch {batch_id}: no rows to write.")
         return
 
-    create_indexes(collection)
-    INDEXES_CREATED = True
+    documents = [
+        build_prediction_document(
+            row=row,
+            batch_id=batch_id
+        )
+        for row in rows
+    ]
 
-
-def insert_document_chunk(collection, documents):
-    if not documents:
-        return 0
-
-    result = collection.insert_many(documents, ordered=False)
-    return len(result.inserted_ids)
-
-
-def write_predictions_to_mongodb(batch_df, batch_id):
     client, collection = get_mongo_collection()
 
     try:
-        create_indexes_once(collection)
+        create_indexes(collection)
 
-        documents = []
-        inserted_count = 0
-        confidence_available_count = 0
-        model_types = set()
+        result = collection.insert_many(documents)
 
-        for row in batch_df.toLocalIterator():
-            document = build_prediction_document(
-                row=row,
-                batch_id=batch_id
-            )
+        model_types = sorted(
+            {
+                document.get("model_type", DEFAULT_MODEL_TYPE)
+                for document in documents
+            }
+        )
 
-            documents.append(document)
-            model_types.add(document.get("model_type", DEFAULT_MODEL_TYPE))
-
-            if document.get("confidence_available"):
-                confidence_available_count += 1
-
-            if len(documents) >= MONGO_INSERT_CHUNK_SIZE:
-                inserted_count += insert_document_chunk(collection, documents)
-                documents = []
-
-        inserted_count += insert_document_chunk(collection, documents)
-
-        if inserted_count == 0:
-            print(f"Batch {batch_id}: no rows to write.")
-            return
+        confidence_available_count = sum(
+            1
+            for document in documents
+            if document.get("confidence_available")
+        )
 
         print(
             f"Batch {batch_id}: inserted "
-            f"{inserted_count} documents into MongoDB. "
-            f"model_type={sorted(model_types)} | "
-            f"confidence_available={confidence_available_count}/{inserted_count}"
+            f"{len(result.inserted_ids)} documents into MongoDB. "
+            f"model_type={model_types} | "
+            f"confidence_available={confidence_available_count}/{len(documents)}"
         )
     finally:
         client.close()

@@ -232,198 +232,6 @@ def aggregate_score_by_sentiment(collection, match):
     ]
 
 
-def aggregate_top_products(collection, match, limit=12):
-    pipeline = [
-        {"$match": {**match, "product_id": {"$ne": None}}},
-        {
-            "$group": {
-                "_id": "$product_id",
-                "total": {"$sum": 1},
-                "average_score": {"$avg": "$score"},
-                "positive": {
-                    "$sum": {"$cond": [{"$eq": ["$predicted_label", "positive"]}, 1, 0]}
-                },
-                "negative": {
-                    "$sum": {"$cond": [{"$eq": ["$predicted_label", "negative"]}, 1, 0]}
-                },
-                "neutral": {
-                    "$sum": {"$cond": [{"$eq": ["$predicted_label", "neutral"]}, 1, 0]}
-                },
-                "unknown": {
-                    "$sum": {
-                        "$cond": [
-                            {"$not": [{"$in": ["$predicted_label", LABELS]}]},
-                            1,
-                            0,
-                        ]
-                    }
-                },
-            }
-        },
-        {"$sort": {"total": -1}},
-        {"$limit": limit},
-    ]
-
-    rows = []
-
-    for item in collection.aggregate(pipeline):
-        label_counts = {
-            "positive": item.get("positive", 0),
-            "negative": item.get("negative", 0),
-            "neutral": item.get("neutral", 0),
-            "unknown": item.get("unknown", 0),
-        }
-
-        dominant_label = max(
-            label_counts,
-            key=lambda label: label_counts[label],
-        )
-
-        rows.append({
-            "product_id": item["_id"],
-            "total": item["total"],
-            "average_score": item.get("average_score"),
-            "positive": label_counts.get("positive", 0),
-            "negative": label_counts.get("negative", 0),
-            "neutral": label_counts.get("neutral", 0),
-            "unknown": label_counts.get("unknown", 0),
-            "dominant_label": dominant_label,
-        })
-
-    return rows
-
-
-def aggregate_product_score_grid(collection, match, limit=8):
-    top_products = [
-        item["product_id"]
-        for item in aggregate_top_products(collection, match, limit=limit)
-    ]
-
-    if not top_products:
-        return []
-
-    pipeline = [
-        {
-            "$match": {
-                **match,
-                "product_id": {"$in": top_products},
-                "score": {"$in": [1, 2, 3, 4, 5]},
-            }
-        },
-        {
-            "$group": {
-                "_id": {
-                    "product_id": "$product_id",
-                    "score": "$score",
-                },
-                "count": {"$sum": 1},
-            }
-        },
-    ]
-
-    lookup = {
-        product_id: {
-            "product_id": product_id,
-            "scores": {str(score): 0 for score in range(1, 6)},
-            "total": 0,
-        }
-        for product_id in top_products
-    }
-
-    for item in collection.aggregate(pipeline):
-        product_id = item["_id"].get("product_id")
-        score = str(item["_id"].get("score"))
-        count = item["count"]
-
-        if product_id in lookup and score in lookup[product_id]["scores"]:
-            lookup[product_id]["scores"][score] = count
-            lookup[product_id]["total"] += count
-
-    return [lookup[product_id] for product_id in top_products]
-
-
-def aggregate_score_sentiment_alignment(collection, match):
-    rows = aggregate_score_by_sentiment(collection, match)
-
-    score_lookup = {
-        score: {
-            "score": score,
-            "positive": 0,
-            "negative": 0,
-            "neutral": 0,
-            "unknown": 0,
-            "total": 0,
-            "aligned": 0,
-            "suspicious": 0,
-        }
-        for score in range(1, 6)
-    }
-
-    for row in rows:
-        score = row.get("score")
-        label = row.get("predicted_label") or "unknown"
-        count = row.get("count", 0)
-
-        if score not in score_lookup:
-            continue
-
-        score_lookup[score][label] = score_lookup[score].get(label, 0) + count
-        score_lookup[score]["total"] += count
-
-        if (score >= 4 and label == "positive") or (score <= 2 and label == "negative") or (score == 3 and label == "neutral"):
-            score_lookup[score]["aligned"] += count
-
-        if (score >= 4 and label == "negative") or (score <= 2 and label == "positive") or (score in (1, 5) and label == "neutral"):
-            score_lookup[score]["suspicious"] += count
-
-    return list(score_lookup.values())
-
-
-def aggregate_accuracy_by_date(collection, match, max_dates=180):
-    pipeline = [
-        {
-            "$match": {
-                **match,
-                "review_date": {"$ne": None},
-                "true_label": {"$in": LABELS},
-                "predicted_label": {"$in": LABELS},
-            }
-        },
-        {
-            "$group": {
-                "_id": "$review_date",
-                "total": {"$sum": 1},
-                "correct": {
-                    "$sum": {
-                        "$cond": [
-                            {"$eq": ["$true_label", "$predicted_label"]},
-                            1,
-                            0,
-                        ]
-                    }
-                },
-            }
-        },
-        {"$sort": {"_id": 1}},
-    ]
-
-    rows = [
-        {
-            "review_date": item["_id"],
-            "total": item["total"],
-            "correct": item["correct"],
-            "accuracy": item["correct"] / item["total"] if item["total"] else None,
-        }
-        for item in collection.aggregate(pipeline)
-    ]
-
-    if len(rows) > max_dates:
-        step = max(1, len(rows) // max_dates)
-        rows = rows[::step]
-
-    return rows
-
-
 def aggregate_predictions_by_date(collection, match, max_dates=420):
     pipeline = [
         {"$match": {**match, "review_date": {"$ne": None}}},
@@ -785,7 +593,6 @@ def api_summary():
         model_counts = aggregate_counts(collection, match, "model_type")
         confidence = calculate_confidence_analytics(collection, match)
         confusion = aggregate_confusion_matrix(collection, match)
-        suspicious_query = suspicious_match(match)
 
         latest_doc = collection.find_one(match, sort=[("processed_at", DESCENDING)])
         oldest_doc = collection.find_one(match, sort=[("processed_at", ASCENDING)])
@@ -811,7 +618,6 @@ def api_summary():
             "streamed_accuracy_display": f"{confusion['accuracy'] * 100:.2f}%" if confusion["accuracy"] is not None else "N/A",
             "streamed_correct": confusion["correct"],
             "streamed_labeled_total": confusion["total"],
-            "suspicious_count": collection.count_documents(suspicious_query),
             "latest_processed_at": format_datetime(latest_doc.get("processed_at")) if latest_doc else None,
             "oldest_processed_at": format_datetime(oldest_doc.get("processed_at")) if oldest_doc else None,
             **confidence,
@@ -838,11 +644,7 @@ def api_charts():
             "sentiment_distribution": aggregate_counts(collection, match, "predicted_label"),
             "score_distribution": aggregate_score_distribution(collection, match),
             "score_by_sentiment": aggregate_score_by_sentiment(collection, match),
-            "score_sentiment_alignment": aggregate_score_sentiment_alignment(collection, match),
             "predictions_by_date": aggregate_predictions_by_date(collection, match),
-            "accuracy_by_date": aggregate_accuracy_by_date(collection, match),
-            "top_products": aggregate_top_products(collection, match),
-            "product_score_grid": aggregate_product_score_grid(collection, match),
             "source_split_distribution": aggregate_counts(collection, match, "source_split"),
             "model_type_distribution": aggregate_counts(collection, match, "model_type"),
             "batch_records": aggregate_batch_records(collection, match),
