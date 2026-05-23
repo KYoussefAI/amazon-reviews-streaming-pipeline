@@ -1,20 +1,12 @@
-from kafka import KafkaProducer
+import argparse
 import json
-import os
+import logging
 import time
+
 import pandas as pd
+from kafka import KafkaProducer
 
-
-STREAM_DATA_PATH = "data/processed/test_reviews.jsonl"
-
-KAFKA_TOPIC = os.environ.get("KAFKA_TOPIC", "amazon_reviews")
-KAFKA_BOOTSTRAP_SERVERS = os.environ.get(
-    "KAFKA_BOOTSTRAP_SERVERS",
-    "localhost:9092,localhost:9093,localhost:9094",
-)
-
-SLEEP_SECONDS = float(os.environ.get("PRODUCER_SLEEP_SECONDS", "0.2"))
-START_ROW = 0
+from src.config import KafkaSettings, ProducerSettings
 
 REQUIRED_COLUMNS = [
     "product_id",
@@ -27,6 +19,9 @@ REQUIRED_COLUMNS = [
     "label",
     "source_split",
 ]
+
+
+logger = logging.getLogger(__name__)
 
 
 def validate_columns(df):
@@ -68,9 +63,8 @@ def clean_stream_dataframe(df):
     bad_rows = df[df["score"].isna()]
 
     if not bad_rows.empty:
-        print("========== WARNING: BAD SCORE ROWS FOUND ==========")
-        print(bad_rows.head())
-        print(f"Bad rows removed: {len(bad_rows)}")
+        logger.warning("Bad score rows found; removed %s rows.", len(bad_rows))
+        logger.warning("Sample invalid rows:\n%s", bad_rows.head().to_string(index=False))
 
     df = df.dropna(subset=["score"])
     df["score"] = df["score"].astype(int)
@@ -100,21 +94,94 @@ def build_message(row, source_row_index):
     }
 
 
+def validate_message(message):
+    missing_fields = [
+        field
+        for field in REQUIRED_COLUMNS + ["source_row_index"]
+        if field not in message
+    ]
+
+    if missing_fields:
+        raise ValueError(
+            "Kafka message is missing required fields: "
+            + ", ".join(missing_fields)
+        )
+
+    score = message["score"]
+    if not isinstance(score, int) or score < 1 or score > 5:
+        raise ValueError(f"Kafka message has invalid score: {score}")
+
+
+def parse_args():
+    settings = ProducerSettings()
+
+    parser = argparse.ArgumentParser(
+        description="Stream exported Amazon review records into Kafka."
+    )
+    parser.add_argument(
+        "--input-path",
+        default=str(settings.stream_data_path),
+        help="Path to the JSONL file produced for streaming simulation.",
+    )
+    parser.add_argument(
+        "--topic",
+        default=KafkaSettings().topic,
+        help="Kafka topic to publish to.",
+    )
+    parser.add_argument(
+        "--bootstrap-servers",
+        default=KafkaSettings().bootstrap_servers,
+        help="Kafka bootstrap servers list.",
+    )
+    parser.add_argument(
+        "--sleep-seconds",
+        type=float,
+        default=settings.sleep_seconds,
+        help="Delay between messages. Set to 0 for fastest replay.",
+    )
+    parser.add_argument(
+        "--start-row",
+        type=int,
+        default=settings.start_row,
+        help="Zero-based row index to start streaming from.",
+    )
+    parser.add_argument(
+        "--log-level",
+        default="INFO",
+        help="Python logging level.",
+    )
+
+    return parser.parse_args()
+
+
+def configure_logging(level):
+    logging.basicConfig(
+        level=getattr(logging, str(level).upper(), logging.INFO),
+        format="%(asctime)s %(levelname)s %(name)s - %(message)s",
+    )
+
+
 def main():
+    args = parse_args()
+    configure_logging(args.log_level)
+
     df = pd.read_json(
-        STREAM_DATA_PATH,
+        args.input_path,
         lines=True
     )
 
     df = clean_stream_dataframe(df)
 
-    if START_ROW >= len(df):
-        print("No rows left to stream.")
-        print(f"START_ROW={START_ROW}, total rows={len(df)}")
+    if args.start_row >= len(df):
+        logger.info(
+            "No rows left to stream. start_row=%s total_rows=%s",
+            args.start_row,
+            len(df),
+        )
         return
 
     producer = KafkaProducer(
-        bootstrap_servers=KAFKA_BOOTSTRAP_SERVERS,
+        bootstrap_servers=args.bootstrap_servers,
         value_serializer=lambda value: json.dumps(
             value,
             ensure_ascii=False
@@ -122,46 +189,48 @@ def main():
         retries=5
     )
 
-    print("========== PRODUCER STARTED ==========")
-    print(f"Streaming from: {STREAM_DATA_PATH}")
-    print(f"Rows available: {len(df)}")
-    print(f"Starting from row index: {START_ROW}")
-    print(f"Kafka topic: {KAFKA_TOPIC}")
-    print("Message fields:")
-    print(", ".join(REQUIRED_COLUMNS + ["source_row_index"]))
+    logger.info("Producer started.")
+    logger.info("Streaming from %s", args.input_path)
+    logger.info("Rows available: %s", len(df))
+    logger.info("Starting from row index: %s", args.start_row)
+    logger.info("Kafka topic: %s", args.topic)
+    logger.info("Message fields: %s", ", ".join(REQUIRED_COLUMNS + ["source_row_index"]))
 
     try:
-        for index, row in df.iloc[START_ROW:].iterrows():
+        for index, row in df.iloc[args.start_row:].iterrows():
             message = build_message(
                 row=row,
                 source_row_index=index
             )
+            validate_message(message)
 
             producer.send(
-                KAFKA_TOPIC,
+                args.topic,
                 message
             )
 
-            print(
-                f"Sent row {index + 1}/{len(df)} | "
-                f"product_id={message['product_id']} | "
-                f"review_date={message['review_date']} | "
-                f"score={message['score']} | "
-                f"label={message['label']} | "
-                f"source_split={message['source_split']} | "
-                f"text={message['text'][:80]}..."
+            logger.info(
+                "Sent row %s/%s | product_id=%s | review_date=%s | score=%s | label=%s | source_split=%s | text=%s...",
+                index + 1,
+                len(df),
+                message["product_id"],
+                message["review_date"],
+                message["score"],
+                message["label"],
+                message["source_split"],
+                message["text"][:80],
             )
 
-            if SLEEP_SECONDS > 0:
-                time.sleep(SLEEP_SECONDS)
+            if args.sleep_seconds > 0:
+                time.sleep(args.sleep_seconds)
 
     except KeyboardInterrupt:
-        print("Producer stopped manually.")
+        logger.info("Producer stopped manually.")
 
     finally:
         producer.flush()
         producer.close()
-        print("========== PRODUCER CLOSED ==========")
+        logger.info("Producer closed.")
 
 
 if __name__ == "__main__":

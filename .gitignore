@@ -25,6 +25,7 @@ venv/
 env/
 big_data_env/
 .env
+!.env.example
 
 # ----------------------------
 # Python packaging / test cache
@@ -48,6 +49,7 @@ checkpoints/
 spark-warehouse/
 metastore_db/
 derby.log
+__pycache__/
 
 # ----------------------------
 # Spark trained models / generated artifacts
@@ -62,6 +64,9 @@ src/ml/models/
 # ----------------------------
 *.log
 logs/
+
+# Airflow local runtime state
+airflow/airflow_home/
 
 # ----------------------------
 # Local notes / temporary progress files

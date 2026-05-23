@@ -39,7 +39,8 @@ This project is built as a portfolio-grade Big Data system demonstrating a compl
 21. [Runtime Commands Reference](#21-runtime-commands-reference)
 22. [Example MongoDB Document](#22-example-mongodb-document)
 23. [Key Engineering Decisions](#23-key-engineering-decisions)
-24. [Future Improvements](#24-future-improvements)
+24. [Limitations](#24-limitations)
+25. [Future Work](#25-future-work)
 
 ---
 
@@ -148,15 +149,14 @@ checks → export → validation → training → model validation.
 ```text
 .
 ├── README.md
+├── pyproject.toml
 ├── requirements.txt
-├── project_context.md
-├── structure.txt
-├── useful_commands.txt
+├── requirements-dev.txt
+├── .env.example
 │
 ├── airflow/
 │   ├── README_AIRFLOW.md
 │   ├── requirements-airflow.txt
-│   ├── airflow_home/
 │   ├── dags/
 │   │   └── amazon_reviews_batch_pipeline.py
 │   └── scripts/
@@ -176,15 +176,10 @@ checks → export → validation → training → model validation.
 │       └── test_reviews_stream_json/
 │
 ├── docs/
-│   ├── PHASE5.md
+│   ├── runbook.md
 │   ├── spark_sentiment_tuning_report.md
 │   ├── amazon_reviews_sentiment_report_2026-05-02_18-56-28.pdf
 │   └── screenshots/
-│       ├── 02_docker_services_running.png
-│       ├── 03_full_training_metrics.png
-│       ├── 04_spark_streaming_to_mongodb.png
-│       ├── 05_producer_streaming_reviews.png
-│       ├── 06_mongodb_latest_predictions.png
 │       ├── 19_airflow_login_page.png
 │       ├── 20_airflow_dag_list_detected.png
 │       ├── 21_airflow_dag_graph_view.png
@@ -205,6 +200,9 @@ checks → export → validation → training → model validation.
 │   ├── docker-compose.yml
 │   └── topics.md
 │
+├── notebooks/
+│   └── exploratory_data_analysis.ipynb
+│
 ├── results/
 │   ├── final_full_data_metrics.txt
 │   ├── model_comparison_results.csv
@@ -214,6 +212,10 @@ checks → export → validation → training → model validation.
 │
 ├── scripts/
 │   └── run_web_dashboard.sh
+│
+├── tests/
+│   ├── test_mongodb_writer.py
+│   └── test_producer.py
 │
 └── src/
     ├── __init__.py
@@ -865,7 +867,14 @@ cd amazon-reviews-streaming-pipeline
 python -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
+pip install -r requirements-dev.txt
 python -m nltk.downloader wordnet stopwords
+```
+
+Optional environment setup:
+
+```bash
+cp .env.example .env
 ```
 
 ### Dataset setup
@@ -1008,81 +1017,7 @@ To stop Airflow:
 
 ## 21. Runtime Commands Reference
 
-### Project start
-
-```bash
-cd "/mnt/c/Users/Me/Desktop/END TO END DATA ENGINEERING PROJECTS/BIG DATA PROJECT"
-source .venv/bin/activate
-```
-
-### Check Docker services
-
-```bash
-cd kafka
-docker compose ps
-cd ..
-```
-
-### Check MongoDB predictions
-
-```bash
-docker exec -it mongodb mongosh
-```
-
-```javascript
-use amazon_reviews_db
-
-db.sentiment_predictions.find(
-  {},
-  {
-    _id: 0,
-    product_id: 1,
-    review_date: 1,
-    score: 1,
-    true_label: 1,
-    predicted_label: 1,
-    model_type: 1,
-    confidence: 1,
-    confidence_available: 1,
-    source_split: 1,
-    batch_id: 1,
-    processed_at: 1
-  }
-).sort({ processed_at: -1 }).limit(5).pretty()
-```
-
-### Count predictions by model
-
-```javascript
-db.sentiment_predictions.aggregate([
-  { $group: { _id: "$model_type", count: { $sum: 1 } } },
-  { $sort: { count: -1 } }
-])
-```
-
-### Verify required ProductId
-
-```javascript
-db.sentiment_predictions.find(
-  { product_id: "B001E4KFG0" },
-  {
-    _id: 0,
-    product_id: 1,
-    score: 1,
-    true_label: 1,
-    predicted_label: 1,
-    model_type: 1,
-    batch_id: 1,
-    source_split: 1
-  }
-).sort({ processed_at: -1 }).limit(5).pretty()
-```
-
-### Tune Logistic Regression hyperparameters
-
-```bash
-spark-submit src/spark/training/tune_spark_pipeline_sa.py
-```
+The maintained command reference now lives in [docs/runbook.md](docs/runbook.md).
 
 ### Verify Kafka topic
 
@@ -1165,7 +1100,15 @@ The dashboard does not invent confidence scores for models that do not output pr
 
 ---
 
-## 24. Future Improvements
+## 24. Limitations
+
+- The project targets a local development environment and is not yet packaged as a single-command deployment.
+- Full integration validation across Kafka, Spark, MongoDB, and Airflow is still a manual runbook process.
+- The online stream uses the best saved single Spark model instead of the heavier offline ensemble to keep inference simpler and more stable.
+
+---
+
+## 25. Future Work
 
 | Improvement | Description |
 |---|---|
@@ -1176,8 +1119,7 @@ The dashboard does not invent confidence scores for models that do not output pr
 | REST scoring endpoint | Submit custom review text and return a prediction |
 | Prometheus and Grafana | Monitor service health, throughput, and lag |
 | Data drift monitoring | Detect changes in review distributions over time |
-| CI/CD with GitHub Actions | Run checks automatically on each push |
-| Unit and integration tests | Test transformations, model outputs, Kafka messages, and MongoDB writes |
+| Integration test harness | Add reproducible end-to-end checks across Kafka, Spark, MongoDB, and Airflow |
 | Cloud deployment | Deploy the architecture on cloud infrastructure |
 
 ---

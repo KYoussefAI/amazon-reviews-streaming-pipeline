@@ -6,12 +6,14 @@ from statistics import mean
 from flask import Flask, jsonify, render_template, request, send_file
 from pymongo import MongoClient, DESCENDING, ASCENDING
 
+from src.config import MongoSettings
 
-MONGO_URI = os.environ.get("MONGO_URI", "mongodb://localhost:27017")
-DATABASE_NAME = os.environ.get("MONGO_DATABASE", "amazon_reviews_db")
-COLLECTION_NAME = os.environ.get("MONGO_COLLECTION", "sentiment_predictions")
+MONGO_SETTINGS = MongoSettings()
+MONGO_URI = MONGO_SETTINGS.uri
+DATABASE_NAME = MONGO_SETTINGS.database
+COLLECTION_NAME = MONGO_SETTINGS.collection
 
-SOURCE_NAME = os.environ.get("MONGO_SOURCE", "spark_structured_streaming")
+SOURCE_NAME = os.environ.get("MONGO_SOURCE", MONGO_SETTINGS.source)
 REQUIRED_PRODUCT_ID = os.environ.get("REQUIRED_PRODUCT_ID", "B001E4KFG0")
 
 DEFAULT_LIMIT = 100

@@ -1,3 +1,5 @@
+import argparse
+import logging
 import os
 import sys
 
@@ -14,6 +16,8 @@ from pyspark.sql.types import (
 
 from pyspark.ml import PipelineModel
 
+from src.config import KafkaSettings, StreamingSettings
+
 
 PROJECT_ROOT = os.getcwd()
 
@@ -24,31 +28,82 @@ if PROJECT_ROOT not in sys.path:
 from src.storage.mongodb_writer import write_predictions_to_mongodb
 from src.spark.training.text_normalization import add_lemmatized_text_column
 
-
-KAFKA_BOOTSTRAP_SERVERS = os.environ.get(
-    "KAFKA_BOOTSTRAP_SERVERS",
-    "localhost:9092,localhost:9093,localhost:9094",
-)
-KAFKA_TOPIC = os.environ.get("KAFKA_TOPIC", "amazon_reviews")
-KAFKA_STARTING_OFFSETS = os.environ.get("KAFKA_STARTING_OFFSETS", "latest")
-KAFKA_MAX_OFFSETS_PER_TRIGGER = os.environ.get("KAFKA_MAX_OFFSETS_PER_TRIGGER")
-ENABLE_STREAMING_LEMMATIZATION = (
-    os.environ.get("ENABLE_STREAMING_LEMMATIZATION", "0") == "1"
-)
-
-# Best single saveable model from validation-based comparison.
-# The ensemble had the best overall Macro F1, but it is heavier for streaming.
-# Among single Spark PipelineModels, One-vs-Rest Linear SVC had the best validation Macro F1.
-BEST_SINGLE_MODEL_NAME = "one_vs_rest_linear_svc"
-BEST_SINGLE_MODEL_PATH = "src/spark/model/ensemble_models/one_vs_rest_linear_svc"
-
-CHECKPOINT_LOCATION = "data/processed/checkpoints/spark_streaming_best_single_model"
+logger = logging.getLogger(__name__)
 
 
-def create_spark_session():
+def parse_args():
+    kafka_settings = KafkaSettings()
+    streaming_settings = StreamingSettings()
+
+    parser = argparse.ArgumentParser(
+        description="Read Amazon review events from Kafka, score them with Spark, and write results to MongoDB."
+    )
+    parser.add_argument(
+        "--bootstrap-servers",
+        default=kafka_settings.bootstrap_servers,
+        help="Kafka bootstrap servers list.",
+    )
+    parser.add_argument(
+        "--topic",
+        default=kafka_settings.topic,
+        help="Kafka topic to subscribe to.",
+    )
+    parser.add_argument(
+        "--starting-offsets",
+        default=kafka_settings.starting_offsets,
+        help="Kafka starting offsets for the stream reader.",
+    )
+    parser.add_argument(
+        "--max-offsets-per-trigger",
+        default=kafka_settings.max_offsets_per_trigger,
+        help="Optional Spark streaming rate limit.",
+    )
+    parser.add_argument(
+        "--model-path",
+        default=str(streaming_settings.best_single_model_path),
+        help="Path to the saved Spark PipelineModel used for inference.",
+    )
+    parser.add_argument(
+        "--model-name",
+        default=streaming_settings.best_single_model_name,
+        help="Model name to store in MongoDB metadata.",
+    )
+    parser.add_argument(
+        "--checkpoint-location",
+        default=str(streaming_settings.checkpoint_location),
+        help="Checkpoint directory for Spark Structured Streaming.",
+    )
+    parser.add_argument(
+        "--enable-lemmatization",
+        action="store_true",
+        default=streaming_settings.enable_lemmatization,
+        help="Apply text lemmatization before prediction.",
+    )
+    parser.add_argument(
+        "--spark-driver-memory",
+        default=streaming_settings.spark_driver_memory,
+        help="Spark driver memory setting.",
+    )
+    parser.add_argument(
+        "--log-level",
+        default="INFO",
+        help="Python logging level.",
+    )
+
+    return parser.parse_args()
+
+
+def configure_logging(level):
+    logging.basicConfig(
+        level=getattr(logging, str(level).upper(), logging.INFO),
+        format="%(asctime)s %(levelname)s %(name)s - %(message)s",
+    )
+
+
+def create_spark_session(spark_driver_memory):
     spark = SparkSession.builder \
         .appName("AmazonReviewsSparkStreamingBestSingleModelPrediction") \
-        .config("spark.driver.memory", "4g") \
+        .config("spark.driver.memory", spark_driver_memory) \
         .getOrCreate()
 
     spark.sparkContext.setLogLevel("ERROR")
@@ -56,11 +111,9 @@ def create_spark_session():
     return spark
 
 
-def load_model():
-    print("========== LOADING BEST SINGLE SPARK MODEL ==========")
-    print(f"Model name: {BEST_SINGLE_MODEL_NAME}")
-    model = PipelineModel.load(BEST_SINGLE_MODEL_PATH)
-    print(f"Model loaded from: {BEST_SINGLE_MODEL_PATH}")
+def load_model(model_name, model_path):
+    logger.info("Loading Spark model %s from %s", model_name, model_path)
+    model = PipelineModel.load(model_path)
 
     return model
 
@@ -161,7 +214,7 @@ def parse_kafka_messages(kafka_df, message_schema):
     return parsed_df
 
 
-def build_prediction_input(parsed_df, labels):
+def build_prediction_input(parsed_df, labels, enable_streaming_lemmatization):
     """
     The saved Spark PipelineModel expects:
     - text
@@ -178,7 +231,7 @@ def build_prediction_input(parsed_df, labels):
         F.col("text")
     )
 
-    if ENABLE_STREAMING_LEMMATIZATION:
+    if enable_streaming_lemmatization:
         prediction_input_df = add_lemmatized_text_column(prediction_input_df)
 
     prediction_input_df = prediction_input_df.withColumn(
@@ -210,7 +263,7 @@ def build_probability_column(predictions):
     return F.array().cast(ArrayType(DoubleType()))
 
 
-def build_output_dataframe(predictions, labels):
+def build_output_dataframe(predictions, labels, model_name):
     output_df = predictions.withColumn(
         "predicted_label",
         build_prediction_label_column(
@@ -225,7 +278,7 @@ def build_output_dataframe(predictions, labels):
         build_probability_column(predictions)
     ).withColumn(
         "model_type",
-        F.lit(BEST_SINGLE_MODEL_NAME)
+        F.lit(model_name)
     ).select(
         "product_id",
         "user_id",
@@ -248,30 +301,33 @@ def build_output_dataframe(predictions, labels):
 
 
 def main():
-    spark = create_spark_session()
-    model = load_model()
+    args = parse_args()
+    configure_logging(args.log_level)
+
+    spark = create_spark_session(args.spark_driver_memory)
+    model = load_model(args.model_name, args.model_path)
 
     labels = get_index_to_label_mapping(model)
 
-    print("========== LABEL INDEX MAPPING ==========")
+    logger.info("Label index mapping:")
     for index, label in enumerate(labels):
-        print(f"{float(index)} -> {label}")
+        logger.info("%s -> %s", float(index), label)
 
     message_schema = build_message_schema()
 
-    print("========== READING FROM KAFKA ==========")
+    logger.info("Reading from Kafka topic %s", args.topic)
 
     kafka_reader = spark.readStream \
         .format("kafka") \
-        .option("kafka.bootstrap.servers", KAFKA_BOOTSTRAP_SERVERS) \
-        .option("subscribe", KAFKA_TOPIC) \
-        .option("startingOffsets", KAFKA_STARTING_OFFSETS) \
+        .option("kafka.bootstrap.servers", args.bootstrap_servers) \
+        .option("subscribe", args.topic) \
+        .option("startingOffsets", args.starting_offsets) \
         .option("failOnDataLoss", "false")
 
-    if KAFKA_MAX_OFFSETS_PER_TRIGGER:
+    if args.max_offsets_per_trigger:
         kafka_reader = kafka_reader.option(
             "maxOffsetsPerTrigger",
-            KAFKA_MAX_OFFSETS_PER_TRIGGER,
+            args.max_offsets_per_trigger,
         )
 
     kafka_df = kafka_reader.load()
@@ -283,24 +339,26 @@ def main():
 
     prediction_input_df = build_prediction_input(
         parsed_df=parsed_df,
-        labels=labels
+        labels=labels,
+        enable_streaming_lemmatization=args.enable_lemmatization,
     )
 
     predictions = model.transform(prediction_input_df)
 
     output_df = build_output_dataframe(
         predictions=predictions,
-        labels=labels
+        labels=labels,
+        model_name=args.model_name,
     )
 
-    print("========== STREAMING BEST SINGLE MODEL PREDICTIONS TO MONGODB STARTED ==========")
+    logger.info("Starting streaming prediction query with checkpoint %s", args.checkpoint_location)
 
     query = output_df.writeStream \
         .foreachBatch(write_predictions_to_mongodb) \
         .outputMode("append") \
         .option(
             "checkpointLocation",
-            CHECKPOINT_LOCATION
+            args.checkpoint_location,
         ) \
         .start()
 

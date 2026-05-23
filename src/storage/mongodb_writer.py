@@ -1,11 +1,11 @@
+import logging
 from datetime import datetime, timezone
 
 from pymongo import MongoClient
 
+from src.config import MongoSettings
 
-MONGO_URI = "mongodb://localhost:27017"
-DATABASE_NAME = "amazon_reviews_db"
-COLLECTION_NAME = "sentiment_predictions"
+logger = logging.getLogger(__name__)
 
 DEFAULT_SOURCE = "spark_structured_streaming"
 DEFAULT_MODEL_TYPE = "unknown"
@@ -13,9 +13,10 @@ DOCUMENT_SCHEMA_VERSION = "v2"
 
 
 def get_mongo_collection():
-    client = MongoClient(MONGO_URI)
-    db = client[DATABASE_NAME]
-    collection = db[COLLECTION_NAME]
+    settings = MongoSettings()
+    client = MongoClient(settings.uri)
+    db = client[settings.database]
+    collection = db[settings.collection]
 
     return client, collection
 
@@ -239,6 +240,38 @@ def build_prediction_document(row, batch_id):
     return document
 
 
+def validate_prediction_document(document):
+    required_fields = [
+        "schema_version",
+        "product_id",
+        "review_date",
+        "score",
+        "true_label",
+        "predicted_label",
+        "model_type",
+        "source_split",
+        "batch_id",
+        "processed_at",
+        "source",
+    ]
+
+    missing_fields = [
+        field
+        for field in required_fields
+        if document.get(field) in (None, "")
+    ]
+
+    if missing_fields:
+        raise ValueError(
+            "MongoDB prediction document is missing required fields: "
+            + ", ".join(missing_fields)
+        )
+
+    score = document["score"]
+    if not isinstance(score, int) or score < 1 or score > 5:
+        raise ValueError(f"MongoDB prediction document has invalid score: {score}")
+
+
 def create_indexes(collection):
     """
     Create useful indexes for dashboard queries.
@@ -264,7 +297,7 @@ def write_predictions_to_mongodb(batch_df, batch_id):
     rows = batch_df.collect()
 
     if not rows:
-        print(f"Batch {batch_id}: no rows to write.")
+        logger.info("Batch %s: no rows to write.", batch_id)
         return
 
     documents = [
@@ -274,6 +307,8 @@ def write_predictions_to_mongodb(batch_df, batch_id):
         )
         for row in rows
     ]
+    for document in documents:
+        validate_prediction_document(document)
 
     client, collection = get_mongo_collection()
 
@@ -295,11 +330,13 @@ def write_predictions_to_mongodb(batch_df, batch_id):
             if document.get("confidence_available")
         )
 
-        print(
-            f"Batch {batch_id}: inserted "
-            f"{len(result.inserted_ids)} documents into MongoDB. "
-            f"model_type={model_types} | "
-            f"confidence_available={confidence_available_count}/{len(documents)}"
+        logger.info(
+            "Batch %s: inserted %s documents into MongoDB. model_type=%s | confidence_available=%s/%s",
+            batch_id,
+            len(result.inserted_ids),
+            model_types,
+            confidence_available_count,
+            len(documents),
         )
     finally:
         client.close()

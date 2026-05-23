@@ -1,18 +1,24 @@
+import logging
 from datetime import datetime, timezone
 
 from pymongo import MongoClient
 
+from src.config import MongoSettings
 
-MONGO_URI = "mongodb://localhost:27017"
-DATABASE_NAME = "amazon_reviews_db"
-COLLECTION_NAME = "sentiment_predictions"
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s %(levelname)s %(name)s - %(message)s",
+)
+logger = logging.getLogger(__name__)
 
 
 def main():
-    client = MongoClient(MONGO_URI)
+    settings = MongoSettings()
+    client = MongoClient(settings.uri)
 
-    db = client[DATABASE_NAME]
-    collection = db[COLLECTION_NAME]
+    db = client[settings.database]
+    collection = db[settings.collection]
 
     document = {
         "text_preview": "python mongodb connection test",
@@ -26,11 +32,10 @@ def main():
 
     result = collection.insert_one(document)
 
-    print("========== MONGODB PYTHON TEST ==========")
-    print(f"Inserted document id: {result.inserted_id}")
+    logger.info("Inserted document id: %s", result.inserted_id)
 
     inserted_document = collection.find_one({"_id": result.inserted_id})
-    print(inserted_document)
+    logger.info("Inserted document: %s", inserted_document)
 
     client.close()
 
