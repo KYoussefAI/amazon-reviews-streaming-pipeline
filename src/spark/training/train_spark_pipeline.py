@@ -498,11 +498,11 @@ SMART NOTES — PIPELINE VERSION
    -> label_index using train label mapping
    -> prediction and probability using trained LogisticRegression
 
-6. Why do we not evaluate test_df now?
+6. Why do we evaluate test_df after model selection?
 
-   Because test data is the final exam.
-   We only use validation while improving/tuning the model.
-   Test is used once after final model selection.
+   Test data is the final exam.
+   We keep it untouched while tuning on validation data.
+   After selecting the final model, we evaluate test metrics once.
 
 7. Current SAMPLE_SIZE
 

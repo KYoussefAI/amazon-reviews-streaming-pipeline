@@ -1001,7 +1001,7 @@ Open:
 http://localhost:5000
 ```
 
-### Step 7 — Optional Airflow orchestration
+### Step 8 — Optional Airflow orchestration
 
 ```bash
 ./airflow/scripts/start_airflow.sh
