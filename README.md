@@ -165,7 +165,7 @@ checks → export → validation → training → model validation.
 │       ├── stop_airflow.sh
 │       └── test_dag.sh
 │
-├── data/
+├── data/  [local/ignored except .gitkeep]
 │   ├── raw/
 │   │   └── Reviews.csv
 │   └── processed/
@@ -193,7 +193,7 @@ checks → export → validation → training → model validation.
 │       ├── flask_risk_monitoring.png
 │       └── flask_streaming_operations.png
 │
-├── exports/
+├── exports/  [local/ignored]
 │   └── mongodb/
 │
 ├── kafka/
@@ -265,7 +265,7 @@ checks → export → validation → training → model validation.
         └── templates/
 ```
 
-The raw dataset and generated runtime artifacts are intentionally kept out of normal Git tracking to keep the repository lightweight.
+The raw dataset and generated runtime artifacts are intentionally kept out of normal Git tracking to keep the repository lightweight. In this tree, entries marked `[local/ignored]` are generated locally or depend on machine-specific data.
 
 ---
 
@@ -936,7 +936,19 @@ results/model_comparison_results.csv
 results/model_comparison_results.md
 ```
 
-### Step 3 — Export the test split for streaming
+### Step 3 — Train saveable ensemble member models for streaming experiments
+
+```bash
+spark-submit src/spark/training/train_ensemble_models.py
+```
+
+This generates:
+
+```text
+src/spark/model/ensemble_models/
+```
+
+### Step 4 — Export the test split for streaming
 
 ```bash
 spark-submit src/spark/training/export_test_split_for_streaming.py
@@ -948,7 +960,7 @@ Expected output:
 data/processed/test_reviews.jsonl
 ```
 
-### Step 4 — Start Spark Structured Streaming
+### Step 5 — Start Spark Structured Streaming
 
 ```bash
 spark-submit \
@@ -965,13 +977,13 @@ spark-submit \
   src/spark/streaming/predict_stream.py
 ```
 
-### Step 5 — Start the Kafka producer in another terminal
+### Step 6 — Start the Kafka producer in another terminal
 
 ```bash
 python src/ingestion/producer.py
 ```
 
-### Step 6 — Start the Flask dashboard in another terminal
+### Step 7 — Start the Flask dashboard in another terminal
 
 ```bash
 ./scripts/run_web_dashboard.sh

@@ -65,8 +65,8 @@ def write_ensemble_metadata(model_metrics):
         file.write("# Ensemble Models Metadata\n\n")
         file.write(f"Generated at: `{datetime.now().isoformat(timespec='seconds')}`\n\n")
         file.write("## Purpose\n\n")
-        file.write("These models are trained separately and loaded together during Spark Structured Streaming inference.\n\n")
-        file.write("The streaming layer will apply each model to the incoming Kafka review and then compute a majority vote.\n\n")
+        file.write("These models are trained separately and saved under one folder for streaming experiments and model-by-model deployment.\n\n")
+        file.write("This script does not implement a streaming majority-vote scorer by itself; it only materializes compatible saved PipelineModel artifacts and records their validation metrics.\n\n")
         file.write("## Saved Models\n\n")
         file.write("| Model | Validation Accuracy | Validation Macro F1 | Positive F1 | Negative F1 | Neutral F1 |\n")
         file.write("|---|---:|---:|---:|---:|---:|\n")
@@ -81,15 +81,14 @@ def write_ensemble_metadata(model_metrics):
                 f"| {row['neutral_f1']:.4f} |\n"
             )
 
-        file.write("\n## Streaming Majority Vote Rule\n\n")
-        file.write("For each review:\n\n")
+        file.write("\n## Saved Model Order\n\n")
+        file.write("The models are saved in this order:\n\n")
         file.write("```text\n")
-        file.write("logistic_regression prediction\n")
-        file.write("+ naive_bayes prediction\n")
-        file.write("+ one_vs_rest_linear_svc prediction\n")
-        file.write("→ majority_vote_prediction\n")
+        file.write("logistic_regression\n")
+        file.write("naive_bayes\n")
+        file.write("one_vs_rest_linear_svc\n")
         file.write("```\n\n")
-        file.write("If there is a tie, the first model order is used as tie-breaker.\n")
+        file.write("If you later build a majority-vote streaming scorer, this order is the natural deterministic tie-break sequence.\n")
 
     print(f"Metadata written to: {metadata_path}")
 

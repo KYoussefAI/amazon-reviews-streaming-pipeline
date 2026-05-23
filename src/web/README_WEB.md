@@ -2,7 +2,7 @@
 
 ## Purpose
 
-This package upgrades the project from a Streamlit-only dashboard to a professional Flask / JavaScript web interface.
+This package provides the project's professional Flask / JavaScript web interface.
 
 It is designed to align with the project PDF requirement for a web solution using:
 

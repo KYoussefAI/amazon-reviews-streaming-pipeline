@@ -35,6 +35,7 @@ Train and compare Spark models:
 ```bash
 spark-submit src/spark/training/train_spark_pipeline.py
 spark-submit src/spark/training/compare_spark_models.py
+spark-submit src/spark/training/train_ensemble_models.py
 ```
 
 ## Streaming Steps
@@ -42,7 +43,9 @@ spark-submit src/spark/training/compare_spark_models.py
 Run the Spark streaming scorer:
 
 ```bash
-spark-submit src/spark/streaming/predict_stream.py
+spark-submit \
+  --packages org.apache.spark:spark-sql-kafka-0-10_2.12:3.2.4 \
+  src/spark/streaming/predict_stream.py
 ```
 
 Replay exported test reviews into Kafka:

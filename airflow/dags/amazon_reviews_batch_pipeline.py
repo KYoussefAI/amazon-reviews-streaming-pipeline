@@ -16,7 +16,7 @@ Important:
         bd-kafka
         bd-spark
         bd-producer
-        bd-streamlit
+        bd-web
 
 Recommended execution:
     Run this DAG manually from the Airflow UI when you want to prepare
@@ -33,10 +33,11 @@ from airflow.operators.bash import BashOperator
 from airflow.operators.empty import EmptyOperator
 
 
-PROJECT_ROOT = os.environ.get(
-    "AMAZON_REVIEWS_PROJECT_ROOT",
-    "/mnt/c/Users/Me/Desktop/END TO END DATA ENGINEERING PROJECTS/BIG DATA PROJECT",
+DEFAULT_PROJECT_ROOT = os.path.abspath(
+    os.path.join(os.path.dirname(__file__), "..", "..")
 )
+
+PROJECT_ROOT = os.environ.get("AMAZON_REVIEWS_PROJECT_ROOT", DEFAULT_PROJECT_ROOT)
 
 VENV_PATH = os.environ.get(
     "AMAZON_REVIEWS_VENV_PATH",
@@ -48,7 +49,10 @@ SPARK_SUBMIT_BIN = os.environ.get("SPARK_SUBMIT_BIN", "spark-submit")
 
 RAW_DATA_PATH = f"{PROJECT_ROOT}/data/raw/Reviews.csv"
 STREAMING_EXPORT_PATH = f"{PROJECT_ROOT}/data/processed/test_reviews.jsonl"
-MODEL_PATH = f"{PROJECT_ROOT}/src/spark/model/sentiment_pipeline_model"
+LEGACY_MODEL_PATH = f"{PROJECT_ROOT}/src/spark/model/sentiment_pipeline_model"
+STREAMING_MODEL_PATH = (
+    f"{PROJECT_ROOT}/src/spark/model/ensemble_models/one_vs_rest_linear_svc"
+)
 
 DEFAULT_BASH_PREFIX = f"""
 set -e
@@ -92,7 +96,7 @@ with DAG(
         test -f "src/ingestion/producer.py"
         test -f "src/spark/streaming/predict_stream.py"
         test -f "src/storage/mongodb_writer.py"
-        test -f "src/dashboard/app.py"
+        test -f "src/web/app.py"
         test -f "kafka/docker-compose.yml"
 
         echo "Project structure check passed."
@@ -162,18 +166,35 @@ with DAG(
         execution_timeout=timedelta(hours=2),
     )
 
-    validate_saved_model = BashOperator(
-        task_id="validate_saved_model",
+    train_ensemble_models = BashOperator(
+        task_id="train_ensemble_models",
         bash_command=f"""
         {DEFAULT_BASH_PREFIX}
 
-        echo "Validating saved Spark PipelineModel..."
+        echo "Training ensemble-compatible streaming models..."
+        "{SPARK_SUBMIT_BIN}" src/spark/training/train_ensemble_models.py
+        """,
+        execution_timeout=timedelta(hours=2),
+    )
 
-        test -d "{MODEL_PATH}"
-        test -f "{MODEL_PATH}/metadata/part-00000" || test -f "{MODEL_PATH}/metadata/_SUCCESS"
+    validate_saved_models = BashOperator(
+        task_id="validate_saved_models",
+        bash_command=f"""
+        {DEFAULT_BASH_PREFIX}
 
-        echo "Saved model found:"
-        find "{MODEL_PATH}" -maxdepth 2 -type f | head -n 20
+        echo "Validating saved Spark model artifacts..."
+
+        test -d "{LEGACY_MODEL_PATH}"
+        test -f "{LEGACY_MODEL_PATH}/metadata/part-00000" || test -f "{LEGACY_MODEL_PATH}/metadata/_SUCCESS"
+
+        test -d "{STREAMING_MODEL_PATH}"
+        test -f "{STREAMING_MODEL_PATH}/metadata/part-00000" || test -f "{STREAMING_MODEL_PATH}/metadata/_SUCCESS"
+
+        echo "Saved batch model found:"
+        find "{LEGACY_MODEL_PATH}" -maxdepth 2 -type f | head -n 20
+
+        echo "Saved streaming model found:"
+        find "{STREAMING_MODEL_PATH}" -maxdepth 2 -type f | head -n 20
         """,
     )
 
@@ -188,7 +209,7 @@ with DAG(
         echo "Terminal 1: bd-kafka"
         echo "Terminal 2: bd-spark"
         echo "Terminal 3: bd-producer"
-        echo "Terminal 4: bd-streamlit"
+        echo "Terminal 4: bd-web"
         """,
     )
 
@@ -198,5 +219,5 @@ with DAG(
 
     start >> check_project_structure >> check_raw_dataset_exists
     check_raw_dataset_exists >> export_test_split_for_streaming >> validate_streaming_export
-    validate_streaming_export >> train_spark_model >> validate_saved_model
-    validate_saved_model >> print_next_runtime_commands >> end
+    validate_streaming_export >> train_spark_model >> train_ensemble_models >> validate_saved_models
+    validate_saved_models >> print_next_runtime_commands >> end

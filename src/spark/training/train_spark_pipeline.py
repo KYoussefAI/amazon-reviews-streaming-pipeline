@@ -133,8 +133,8 @@ def add_class_weights(train_df, val_df, test_df):
 
     train_df = train_df.withColumn("class_weight", weight_expr)
 
-    # Validation and test do not need weights for evaluation,
-    # but adding the column keeps schemas consistent.
+    # Validation and test keep a placeholder weight column only so all
+    # downstream training/evaluation code can operate on a consistent schema.
     val_df = val_df.withColumn("class_weight", F.lit(1.0))
     test_df = test_df.withColumn("class_weight", F.lit(1.0))
 

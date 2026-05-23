@@ -23,7 +23,7 @@ The real-time pipeline still runs separately:
 Kafka + MongoDB
 → Spark Structured Streaming
 → Kafka producer
-→ Streamlit dashboard
+→ Flask web dashboard
 ```
 
 ## Where to paste this folder
@@ -102,18 +102,16 @@ amazon_reviews_batch_orchestration
 The DAG uses these defaults:
 
 ```bash
-AMAZON_REVIEWS_PROJECT_ROOT="/mnt/c/Users/Me/Desktop/END TO END DATA ENGINEERING PROJECTS/BIG DATA PROJECT"
+AMAZON_REVIEWS_PROJECT_ROOT="$(pwd)"
 AMAZON_REVIEWS_VENV_PATH="$AMAZON_REVIEWS_PROJECT_ROOT/.venv"
 ```
 
-If your project path changes, update these in:
+If your project path changes, either restart Airflow from the project root or export the variables explicitly before starting Airflow. The helper scripts already set them from the current repository path:
 
 ```text
 airflow/scripts/start_airflow.sh
 airflow/scripts/test_dag.sh
 ```
-
-or export them manually before starting Airflow.
 
 ## What Airflow orchestrates
 
@@ -124,7 +122,8 @@ or export them manually before starting Airflow.
 | `export_test_split_for_streaming` | Runs `src/spark/training/export_test_split_for_streaming.py` |
 | `validate_streaming_export` | Checks `test_reviews.jsonl`, `source_split`, and `B001E4KFG0` |
 | `train_spark_model` | Runs `spark-submit src/spark/training/train_spark_pipeline.py` |
-| `validate_saved_model` | Checks the saved Spark `PipelineModel` |
+| `train_ensemble_models` | Runs `spark-submit src/spark/training/train_ensemble_models.py` for the streaming model path |
+| `validate_saved_models` | Checks both the legacy batch model and the streaming `PipelineModel` artifact |
 | `print_next_runtime_commands` | Prints next manual commands for the streaming pipeline |
 
 ## What Airflow does not orchestrate
@@ -135,7 +134,7 @@ Airflow should not run infinite streaming services directly:
 bd-kafka
 bd-spark
 bd-producer
-bd-streamlit
+bd-web
 ```
 
 Those are runtime services. Keep them separate for this portfolio version.
